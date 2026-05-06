@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>the_mountain</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">M</div>
+        <div>
+          <h1>the_mountain</h1>
+          <p>always-on setup portal</p>
+        </div>
+      </div>
+      <div class="nav">
+        <button data-page="dashboard" class="active">Dashboard</button>
+        <button data-page="temps">Temperature Network</button>
+        <button data-page="water">Water Probe</button>
+        <button data-page="names">Sensor Names</button>
+        <button data-page="wifi">WiFi</button>
+        <button data-page="services">MQTT &amp; Prometheus</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title">
+          <h2 id="page-title">Dashboard</h2>
+          <p id="page-subtitle">Live node overview</p>
+        </div>
+        <div class="badges">
+          <div class="badge"><b id="badge-id">-</b></div>
+          <div class="badge">WiFi <b id="badge-wifi">-</b></div>
+          <div class="badge">MQTT <b id="badge-mqtt">-</b></div>
+          <div class="badge">Heap <b id="badge-heap">-</b></div>
+        </div>
+      </div>
+
+      <section id="page-dashboard" class="page grid"></section>
+      <section id="page-temps" class="page grid hidden"></section>
+      <section id="page-water" class="page grid hidden"></section>
+      <section id="page-names" class="page grid hidden"></section>
+      <section id="page-wifi" class="page grid hidden"></section>
+      <section id="page-services" class="page grid hidden"></section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
