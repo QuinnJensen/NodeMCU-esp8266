@@ -30,7 +30,7 @@ uint8_t classifyWaterLevel(uint16_t adc) {
 void sampleWaterLevel() {
   pinMode(probeOnPin, OUTPUT);
   pinMode(blueLedPin, OUTPUT);
-  setBlueLed(true);
+  if (config.ledEnabled) setBlueLed(true);
   digitalWrite(probeOnPin, HIGH);
   delay(25);
 
@@ -42,7 +42,7 @@ void sampleWaterLevel() {
     waterLevelIndex = WATER_NO_PROBE;
     lastWaterSampleMs = millis();
     digitalWrite(probeOnPin, LOW);
-    setBlueLed(false);
+    if (config.ledEnabled) setBlueLed(false);
     return;
   }
 
@@ -61,7 +61,7 @@ void sampleWaterLevel() {
   }
 
   digitalWrite(probeOnPin, LOW);
-  setBlueLed(false);
+  if (config.ledEnabled) setBlueLed(false);
 
   if (totalSamples == 0) totalSamples = 1;
   waterAdcRaw = (uint16_t)(sum / totalSamples);

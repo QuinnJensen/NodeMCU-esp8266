@@ -56,6 +56,8 @@ void scanSensors(bool force) {
   if (!force && lastSensorRescanMs > 0 && millis() - lastSensorRescanMs < sensorrescanintervalms) return;
   lastSensorRescanMs = millis();
 
+  flashBlueLed(30); // brief pulse at scan start, mirrors spinner dot
+
   DeviceAddress discovered[maxsensors];
   bool duplicateFound = false;
   uint8_t found = 0;
@@ -107,6 +109,7 @@ void scanSensors(bool force) {
 void requestTemperatureConversion() {
   if (useFakeSensors || sensorCount == 0) return;
   pulseSpinnerDot(900);  // dot visible for full conversion window
+  flashBlueLed(30);      // brief LED flash mirrors the spinner dot
   ds.requestTemperatures();
   conversionPending = true;
   conversionRequestedMs = millis();
@@ -134,6 +137,7 @@ void collectTemperatureResults() {
 void readTemperatures() {
   if (useFakeSensors) return;
   pulseSpinnerDot(900);
+  flashBlueLed(30);      // brief LED flash mirrors the spinner dot
   ds.requestTemperatures();
   unsigned long start = millis();
   while (millis() - start < 800) { yield(); }
