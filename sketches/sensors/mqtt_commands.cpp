@@ -3,7 +3,7 @@
 #include "app_config.h"
 #include "sensor_bus.h"
 #include "water_probe.h"
-#include "mqtt_client.h"
+#include "mqtt_publish.h"
 #include "util.h"
 #include "display_ui.h"
 #include "mqtt_commands.h"

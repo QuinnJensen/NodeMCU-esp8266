@@ -4,7 +4,7 @@
 #include "app_config.h"
 #include "sensor_bus.h"
 #include "water_probe.h"
-#include "mqtt_client.h"
+#include "mqtt_publish.h"
 #include "pins_and_constants.h"
 
 void runScheduledTasks() {

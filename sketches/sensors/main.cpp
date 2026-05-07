@@ -14,9 +14,17 @@
 #include "web_ui.h"
 #include "metrics_server.h"
 #include "mqtt_client.h"
+#include "mqtt_publish.h"
 #include "display_ui.h"
 #include "scheduler.h"
 #include "mqtt_commands.h"
+
+// MQTT message router -- called by lib/shared/mqtt_client on every received message
+static void onMqttMessage(const String& topic, const String& payload) {
+  lastRxRaw = payload;
+  if (topic == commandTopic) handleCommandJson(payload);
+  else lastRxType = "other";
+}
 
 void setup() {
   Serial.begin(115200);
@@ -26,7 +34,7 @@ void setup() {
   initDisplayUi();
   setStatusMessage("booting", 1500);
 
-  // Register display callbacks for wifi_portal (shared lib can't include display_ui.h)
+  // Register display callbacks (shared libs can't include sketch-local display_ui.h)
   {
     WifiPortalDisplay dpCb;
     dpCb.showPortal    = showPortalScreen;
@@ -34,8 +42,6 @@ void setup() {
     dpCb.setStatus     = setStatusMessage;
     setWifiPortalDisplayCallbacks(dpCb);
   }
-
-  // Register display callbacks for mqtt_client (shared lib can't include display_ui.h)
   {
     MqttClientDisplay mqCb;
     mqCb.kickSpinner = kickActivitySpinner;
@@ -43,9 +49,10 @@ void setup() {
     setMqttClientDisplayCallbacks(mqCb);
   }
 
-  if (!LittleFS.begin()) {
-    setStatusMessage("LittleFS fail", 3000);
-  }
+  // Route incoming MQTT messages to sketch handler
+  setMqttMessageHandler(onMqttMessage);
+
+  if (!LittleFS.begin()) setStatusMessage("LittleFS fail", 3000);
 
   loadConfig();
   setupTimeHelpers();
@@ -55,7 +62,6 @@ void setup() {
   loadSensorNames();
   initMqttClient();
 
-  // Startup reconfig countdown — runs inside wifi_portal with WDT feeds
   runStartupPortalIfNeeded();
 
   startMainWebUi();
