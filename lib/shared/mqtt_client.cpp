@@ -1,4 +1,4 @@
-// mqtt_client.cpp -- pure MQTT transport
+// mqtt_client.cpp -- pure MQTT transport, fully non-blocking reconnect
 #include "mqtt_client.h"
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
@@ -6,6 +6,24 @@
 #include "app_config.h"
 #include "util.h"
 
+// ── reconnect state machine ───────────────────────────────────────────────────
+enum class MqttReconnectState : uint8_t {
+  IDLE,        // waiting for retry window
+  RESOLVING,   // DNS lookup (returns quickly on ESP8266)
+  CONNECTING,  // TCP SYN sent; polling wifiClient.connected()
+  HANDSHAKING, // TCP up; running PubSubClient MQTT handshake
+};
+
+static MqttReconnectState sState           = MqttReconnectState::IDLE;
+static unsigned long      sStateEnteredMs  = 0;
+static IPAddress          sResolvedIp;
+
+// TCP connect timeout -- if the TCP layer doesn't report connected() within
+// this window we give up and go back to IDLE.  4 s is long enough for a slow
+// LAN but short enough that the UI stays responsive.
+static const unsigned long mqttConnectTimeoutMs = 4000UL;
+
+// ── display / handler callbacks ──────────────────────────────────────────────
 static MqttClientDisplay    sDisplay;
 static MqttMessageHandler   sMessageHandler   = nullptr;
 static MqttConnectedHandler sConnectedHandler = nullptr;
@@ -14,6 +32,17 @@ void setMqttClientDisplayCallbacks(const MqttClientDisplay& cb) { sDisplay = cb;
 void setMqttMessageHandler(MqttMessageHandler handler)          { sMessageHandler   = handler; }
 void setMqttConnectedHandler(MqttConnectedHandler handler)      { sConnectedHandler = handler; }
 
+const char* mqttReconnectStateLabel() {
+  switch (sState) {
+    case MqttReconnectState::IDLE:        return "idle";
+    case MqttReconnectState::RESOLVING:   return "resolving";
+    case MqttReconnectState::CONNECTING:  return "connecting";
+    case MqttReconnectState::HANDSHAKING: return "handshaking";
+  }
+  return "?";
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 static void _kickSpinner(unsigned long durationMs = 1500) {
   if (sDisplay.kickSpinner) sDisplay.kickSpinner(durationMs);
 }
@@ -21,6 +50,13 @@ static void _setStatus(const String& msg, unsigned long holdMs = 3000) {
   if (sDisplay.setStatus) sDisplay.setStatus(msg, holdMs);
 }
 
+static void enterIdle() {
+  sState          = MqttReconnectState::IDLE;
+  sStateEnteredMs = millis();
+  lastMqttAttemptMs = millis();
+}
+
+// ── publish helper (unchanged) ────────────────────────────────────────────────
 static bool serializeDocToBuffer(const JsonDocument& doc, char* buf, size_t sz, size_t& outLen) {
   outLen = 0;
   if (!buf || sz == 0) return false;
@@ -49,6 +85,7 @@ bool publishJsonDocToTopic(const char* topic, const JsonDocument& doc, bool reta
   return ok;
 }
 
+// ── MQTT message callback ─────────────────────────────────────────────────────
 static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String msg;
   msg.reserve(length);
@@ -59,12 +96,14 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   _kickSpinner();
 }
 
-bool mqttConnect() {
+// ── HANDSHAKING: PubSubClient MQTT connect over already-open TCP socket ───────
+static bool runMqttHandshake() {
   mqtt.setServer(config.mqttHost, config.mqttPort);
   mqtt.setCallback(mqttCallback);
   mqtt.setBufferSize(mqttbuffersize);
 
-  String clientId = "temp-network-" + sanitizeTopicPart(safeDeviceId()) + "-" + String(ESP.getChipId(), HEX);
+  String clientId = "temp-network-" + sanitizeTopicPart(safeDeviceId()) +
+                    "-" + String(ESP.getChipId(), HEX);
 
   StaticJsonDocument<160> willDoc;
   willDoc["type"]   = "status";
@@ -77,34 +116,31 @@ bool mqttConnect() {
     return false;
   }
 
-  _setStatus("connecting brkr", 2000);
-  Serial.println("[MQTT] connect attempt");
-  Serial.print("[MQTT] host: ");   Serial.println(config.mqttHost);
-  Serial.print("[MQTT] port: ");   Serial.println(config.mqttPort);
-  Serial.print("[MQTT] client: "); Serial.println(clientId);
+  Serial.print("[MQTT] handshake clientId="); Serial.println(clientId);
 
-  bool ok = mqtt.connect(clientId.c_str(), nullptr, nullptr, statusTopic, 0, true, willPayload);
-  Serial.print("[MQTT] result: "); Serial.println(ok ? "ok" : "fail");
-  Serial.print("[MQTT] state: ");  Serial.println(mqtt.state());
+  // mqtt.connect() is fast here -- TCP socket is already open
+  bool ok = mqtt.connect(clientId.c_str(), nullptr, nullptr,
+                         statusTopic, 0, true, willPayload);
+  Serial.print("[MQTT] handshake result="); Serial.println(ok ? "ok" : "fail");
+  Serial.print("[MQTT] state="); Serial.println(mqtt.state());
 
   if (!ok) { _setStatus("broker conn fail", 2000); return false; }
 
   bool subOk = mqtt.subscribe(commandTopic);
-  Serial.print("[MQTT] subscribe: "); Serial.println(subOk ? "ok" : "failed");
+  Serial.print("[MQTT] subscribe="); Serial.println(subOk ? "ok" : "failed");
   if (!subOk) { _setStatus("cmd sub failed", 2000); mqtt.disconnect(); return false; }
 
   _setStatus("broker connected", 2000);
-
-  // Notify sketch -- fires initialSampleAndPublish equivalent with real data
   if (sConnectedHandler) sConnectedHandler();
-
   return true;
 }
 
+// ── public API ────────────────────────────────────────────────────────────────
 void initMqttClient() {
   mqtt.setServer(config.mqttHost, config.mqttPort);
   mqtt.setCallback(mqttCallback);
   mqtt.setBufferSize(mqttbuffersize);
+  enterIdle();
 }
 
 void startMqttIfWifiReady() {
@@ -114,13 +150,92 @@ void startMqttIfWifiReady() {
 
 void serviceMqttClient() {
   if (WiFi.status() != WL_CONNECTED) return;
-  if (!mqtt.connected()) {
-    mqttOnlinePublished = false;
-    if (millis() - lastMqttAttemptMs >= mqttretryms) {
-      lastMqttAttemptMs = millis();
-      mqttConnect();
-    }
+
+  // ── already connected: just pump PubSubClient ────────────────────────────
+  if (mqtt.connected()) {
+    sState = MqttReconnectState::IDLE; // reset so next disconnect starts fresh
+    mqttOnlinePublished = true;        // guard: stays true while connected
+    mqtt.loop();
     return;
   }
-  mqtt.loop();
+
+  // ── not connected: run the state machine ─────────────────────────────────
+  mqttOnlinePublished = false;
+  unsigned long now = millis();
+
+  switch (sState) {
+
+    // ── IDLE: wait for retry interval ──────────────────────────────────────
+    case MqttReconnectState::IDLE:
+      if (now - lastMqttAttemptMs >= mqttretryms) {
+        Serial.print("[MQTT] begin reconnect -> RESOLVING host=");
+        Serial.println(config.mqttHost);
+        _setStatus("connecting brkr", 2000);
+        sState = MqttReconnectState::RESOLVING;
+        sStateEnteredMs = now;
+      }
+      break;
+
+    // ── RESOLVING: DNS lookup ───────────────────────────────────────────────
+    // WiFi.hostByName() on ESP8266 uses LWIP's async resolver but the
+    // Arduino wrapper blocks for up to ~100 ms if the DNS server is reachable.
+    // For bare IP strings it returns in microseconds.
+    // We accept this brief pause -- it only happens once per retry cycle.
+    case MqttReconnectState::RESOLVING: {
+      IPAddress ip;
+      int res = WiFi.hostByName(config.mqttHost, ip);
+      if (res == 1) {
+        sResolvedIp = ip;
+        Serial.print("[MQTT] resolved "); Serial.print(config.mqttHost);
+        Serial.print(" -> "); Serial.println(ip);
+        // Initiate TCP connect -- returns quickly; LWIP does the SYN in bg
+        wifiClient.setTimeout(mqttConnectTimeoutMs);
+        bool started = wifiClient.connect(sResolvedIp, config.mqttPort);
+        if (!started) {
+          Serial.println("[MQTT] TCP connect() returned false immediately");
+          _setStatus("broker unreachable", 2000);
+          enterIdle();
+          break;
+        }
+        sState = MqttReconnectState::CONNECTING;
+        sStateEnteredMs = now;
+        Serial.println("[MQTT] TCP SYN sent -> CONNECTING");
+      } else {
+        Serial.print("[MQTT] DNS failed for "); Serial.println(config.mqttHost);
+        _setStatus("DNS fail", 2000);
+        enterIdle();
+      }
+      break;
+    }
+
+    // ── CONNECTING: poll until TCP up or timeout ────────────────────────────
+    case MqttReconnectState::CONNECTING:
+      if (wifiClient.connected()) {
+        Serial.println("[MQTT] TCP connected -> HANDSHAKING");
+        sState = MqttReconnectState::HANDSHAKING;
+        sStateEnteredMs = now;
+        // fall through intentionally to run handshake this same tick
+      } else if (now - sStateEnteredMs >= mqttConnectTimeoutMs) {
+        Serial.println("[MQTT] TCP connect timeout");
+        _setStatus("broker timeout", 2000);
+        wifiClient.stop();
+        enterIdle();
+        break;
+      } else {
+        // Still waiting -- yield so the rest of loop() runs
+        break;
+      }
+      // fall through
+      [[fallthrough]];
+
+    // ── HANDSHAKING: MQTT protocol over open TCP socket ─────────────────────
+    case MqttReconnectState::HANDSHAKING:
+      if (runMqttHandshake()) {
+        sState = MqttReconnectState::IDLE; // connected; next disconnect restarts
+      } else {
+        wifiClient.stop();
+        enterIdle();
+      }
+      break;
+  }
 }

@@ -16,7 +16,9 @@ void setMqttMessageHandler(MqttMessageHandler handler);
 void setMqttConnectedHandler(MqttConnectedHandler handler);
 
 bool publishJsonDocToTopic(const char* topic, const JsonDocument& doc, bool retained);
-bool mqttConnect();
 void initMqttClient();
 void startMqttIfWifiReady();
 void serviceMqttClient();
+
+// Exposed for display -- returns human-readable reconnect state label
+const char* mqttReconnectStateLabel();
