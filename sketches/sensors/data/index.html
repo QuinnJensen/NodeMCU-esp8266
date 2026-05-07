@@ -28,9 +28,10 @@ button,input{font:inherit}
 .topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
 .title h2{margin:0;font-size:28px}
 .title p{margin:4px 0 0;color:var(--muted)}
-.badges{display:flex;flex-wrap:wrap;gap:10px}
+.badges{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .badge{padding:8px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px;color:var(--muted)}
 .badge b{color:var(--text)}
+.badge.ver{font-size:11px;opacity:.7;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .grid{display:grid;gap:16px}
 .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -108,6 +109,7 @@ button,input{font:inherit}
           <div class="badge">WiFi <b id="badge-wifi">-</b></div>
           <div class="badge">MQTT <b id="badge-mqtt">-</b></div>
           <div class="badge">Heap <b id="badge-heap">-</b></div>
+          <div class="badge ver" id="badge-version" title="Firmware build version">-</div>
         </div>
       </div>
 
@@ -133,10 +135,10 @@ button,input{font:inherit}
 
   <script>
 // Poll timing constants
-const POLL_BASE    = 8000;   // normal interval ms
-const POLL_MAX     = 60000;  // maximum backoff cap ms
-const POLL_SLOW_MS = 6000;   // RTT above this is considered "slow"
-const POLL_STEP    = 4000;   // recovery step toward POLL_BASE on success
+const POLL_BASE    = 8000;
+const POLL_MAX     = 60000;
+const POLL_SLOW_MS = 6000;
+const POLL_STEP    = 4000;
 
 const state={
   status:null,temps:null,water:null,config:null,
@@ -161,8 +163,6 @@ async function fetchLiveData(){
   state.water =await fetchJson('/api/water');
 }
 
-// ── Adaptive poll backoff ──────────────────────────────────────────────────
-
 function onPollSuccess(rttMs){
   state.poll.lastRtt=rttMs;
   state.poll.errors=0;
@@ -180,27 +180,18 @@ function resetPollBackoff(){
   state.poll.errors=0;
 }
 
-// ── Config fingerprint / snapshot ─────────────────────────────────────────
-
 function configFingerprint(c){
   if(!c)return '';
   return JSON.stringify({
-    h:c.mqtthost||'',
-    p:c.mqttport??0,
-    b:c.basetopic||'',
-    d:c.deviceid||'',
-    pp:c.prometheusport??0,
-    le:!!c.led_enabled,
-    wi:c.water?.intervalms??0,
-    wt:(c.water?.thresholds||[]).join(',')
+    h:c.mqtthost||'',p:c.mqttport??0,b:c.basetopic||'',d:c.deviceid||'',
+    pp:c.prometheusport??0,le:!!c.led_enabled,
+    wi:c.water?.intervalms??0,wt:(c.water?.thresholds||[]).join(',')
   });
 }
 
 function snapshotConfig(){
   state.configSnapshot=configFingerprint(state.config);
 }
-
-// ── Stale-config banner ────────────────────────────────────────────────────
 
 function injectStaleConfigBanner(){
   if(document.getElementById('stale-config-banner'))return;
@@ -237,8 +228,6 @@ function reloadSettingsFromBanner(){
   forceRenderSettings();
 }
 
-// ── Poll loop ──────────────────────────────────────────────────────────────
-
 async function refreshAll(){
   stopPoll();
   resetPollBackoff();
@@ -264,16 +253,10 @@ async function pollTick(){
     } else {
       state.config=freshConfig;
     }
-
     await fetchLiveData();
-
     const rtt=Date.now()-t0;
-    if(rtt>POLL_SLOW_MS){
-      onPollFailure(rtt);
-    } else {
-      onPollSuccess(rtt);
-    }
-
+    if(rtt>POLL_SLOW_MS) onPollFailure(rtt);
+    else onPollSuccess(rtt);
     renderChrome();
     renderDashboard();
     renderTemps();
@@ -295,8 +278,6 @@ function stopPoll(){
   if(state.pollTimer){clearTimeout(state.pollTimer);state.pollTimer=null;}
 }
 
-// ── Chrome / header bar ────────────────────────────────────────────────────
-
 function renderChrome(){
   const s=state.status||{};
   document.getElementById('badge-id').textContent=s.id||'-';
@@ -308,9 +289,9 @@ function renderChrome(){
     backed ? heap+'\u2009/\u2009poll '+(state.poll.interval/1000|0)+'s' : heap;
   const hb=document.getElementById('badge-heap');
   if(hb) hb.style.opacity=backed?'0.65':'1';
+  const vb=document.getElementById('badge-version');
+  if(vb && s.build_version) vb.textContent=s.build_version;
 }
-
-// ── Page renderers ─────────────────────────────────────────────────────────
 
 function renderDashboard(){
   const s=state.status||{};
@@ -342,7 +323,6 @@ function renderSensorNamesTable(rebuild=true){
   if(!tbody)return;
   const sensors=(state.temps||{}).sensors||[];
   if(countEl)countEl.textContent=sensors.length;
-
   if(rebuild){
     tbody.innerHTML=sensors.length
       ?sensors.map(s=>{
@@ -361,7 +341,6 @@ function renderSensorNamesTable(rebuild=true){
       :`<tr><td colspan='5' class='muted'>No active sensors. Run a bus scan first.</td></tr>`;
     return;
   }
-
   const byIdx={};
   sensors.forEach(s=>byIdx[s.index]=s);
   tbody.querySelectorAll('tr[data-idx]').forEach(tr=>{
@@ -429,7 +408,6 @@ function renderSettings(){
     knob.style.left=chk.checked?'23px':'3px';
     knob.style.background=chk.checked?'#fff':'#888';
   });
-
   renderSensorNamesTable(true);
 }
 
@@ -533,36 +511,26 @@ function showPage(name){
 async function postScan(){
   setBusy(true);
   stopPoll();
-
   function setScanLabel(txt){
     document.querySelectorAll('#scan-bus-btn, .btn-scan').forEach(b=>b.textContent=txt);
   }
-
   const baselineAge=(state.temps||{}).last_rescan_ms_age??Infinity;
-
   try{
     setScanLabel('Scanning\u2026');
     await postForm('/api/sensors/scan',{});
-
     const POLL_MS=800, TIMEOUT_MS=15000;
     const deadline=Date.now()+TIMEOUT_MS;
     let elapsed=0;
     let done=false;
-
     while(Date.now()<deadline){
       await new Promise(r=>setTimeout(r,POLL_MS));
       elapsed+=POLL_MS;
       setScanLabel(`Scanning\u2026 ${Math.round(elapsed/1000)}s`);
       try{
         const t=await fetchJson('/api/temps');
-        if(t.last_rescan_ms_age < baselineAge){
-          state.temps=t;
-          done=true;
-          break;
-        }
+        if(t.last_rescan_ms_age < baselineAge){state.temps=t;done=true;break;}
       }catch(_){}
     }
-
     await fetchLiveData();
     setScanLabel(done?'Scan Bus':'Scan Bus (timeout)');
     renderChrome();

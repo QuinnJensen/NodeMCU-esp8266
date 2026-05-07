@@ -1,10 +1,14 @@
 #include "app_state.h"
-#include <Wire.h>
 
-Adafruit_SSD1306 display(screenwidth, screenheight, &Wire, oledreset);
+#ifndef BUILD_VERSION
+  #define BUILD_VERSION "dev"
+#endif
+const char* buildVersion = BUILD_VERSION;
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
 WiFiClient wifiClient;
 PubSubClient mqtt(wifiClient);
-OneWire oneWire(oneWirePin);
+OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature ds(&oneWire);
 
 ESP8266WebServer webServer(80);
@@ -28,34 +32,34 @@ bool mqttOnlinePublished = false;
 bool timeConfigured = false;
 
 unsigned long lastAggregateHeartbeatMs = 0;
-unsigned long lastSensorHeartbeatMs = 0;
-unsigned long lastWaterHeartbeatMs = 0;
-unsigned long lastDisplayMs = 0;
-unsigned long lastMqttAttemptMs = 0;
-unsigned long lastTrafficAnimMs = 0;
-unsigned long statusMsgUntilMs = 0;
-unsigned long lastSensorSampleMs = 0;
-unsigned long lastSensorRescanMs = 0;
-unsigned long lastWaterSampleMs = 0;
-unsigned long bootMillis = 0;
-unsigned long mqttPublishCount = 0;
-unsigned long metricsScrapeCount = 0;
+unsigned long lastSensorHeartbeatMs    = 0;
+unsigned long lastWaterHeartbeatMs     = 0;
+unsigned long lastDisplayMs            = 0;
+unsigned long lastMqttAttemptMs        = 0;
+unsigned long lastTrafficAnimMs        = 0;
+unsigned long statusMsgUntilMs         = 0;
+unsigned long lastSensorSampleMs       = 0;
+unsigned long lastSensorRescanMs       = 0;
+unsigned long lastWaterSampleMs        = 0;
+unsigned long bootMillis               = 0;
+unsigned long mqttPublishCount         = 0;
+unsigned long metricsScrapeCount       = 0;
 
-int lastRssi = -127;
+int lastRssi = 0;
 bool mqttTrafficActive = false;
 uint8_t spinnerFrame = 0;
 uint8_t displayStartSensor = 0;
-String lastRxType = "-";
-String lastStatusMsg = "booting";
-String lastRxRaw = "";
+String lastRxType;
+String lastStatusMsg;
+String lastRxRaw;
 
 uint16_t waterAdcRaw = 0;
-uint8_t waterLevelIndex = WATER_UNKNOWN;
+uint8_t waterLevelIndex = 0;
 bool waterValid = false;
 bool waterProbePresent = false;
 
-bool startupDisplayActive = true;
+bool startupDisplayActive = false;
 unsigned long startupDisplayUntilMs = 0;
 
-volatile bool webRequestSensorScan = false;
-volatile bool webRequestWaterSample = false;
+volatile bool webRequestSensorScan   = false;
+volatile bool webRequestWaterSample  = false;

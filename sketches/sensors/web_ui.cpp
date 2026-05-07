@@ -70,6 +70,7 @@ void handleApiStatus() {
   doc["uptime_ms"]       = millis() - bootMillis;
   doc["last_status"]     = lastStatusMsg;
   doc["last_rx_type"]    = lastRxType;
+  doc["build_version"]   = buildVersion;
   appendWaterToJson(doc);
   sendJsonDoc(doc);
 }

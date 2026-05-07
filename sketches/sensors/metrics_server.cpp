@@ -31,9 +31,14 @@ String prometheusLabelsForSensor(uint8_t i) {
 
 String buildPrometheusMetrics() {
   String idLabel = prometheusEscaped(safeDeviceId());
+  String verLabel = prometheusEscaped(String(buildVersion));
   metricsScrapeCount++;
   String m;
   m.reserve(8192);
+  // Build info — version stamp as a label on a constant-1 gauge (Prometheus convention)
+  m += "# HELP temp_build_info Firmware build information.\n";
+  m += "# TYPE temp_build_info gauge\n";
+  m += "temp_build_info{id=\"" + idLabel + "\",version=\"" + verLabel + "\"} 1\n";
   m += "# HELP temp_node_online Node online state.\n";
   m += "# TYPE temp_node_online gauge\n";
   m += "temp_node_online{id=\"" + idLabel + "\"} 1\n";

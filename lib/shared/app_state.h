@@ -71,3 +71,6 @@ extern unsigned long startupDisplayUntilMs;
 
 extern volatile bool webRequestSensorScan;
 extern volatile bool webRequestWaterSample;
+
+// Build version stamp: "YYYYMMDD-HHmmss-abcdef" injected at compile time
+extern const char* buildVersion;
