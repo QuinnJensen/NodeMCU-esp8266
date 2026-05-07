@@ -13,6 +13,9 @@ static bool waitingToCollect = false;
 void runScheduledTasks() {
   unsigned long now = millis();
 
+  // Drive the non-blocking water probe state machine every tick
+  updateWaterSample();
+
   // Phase 2: collect temperature results 800ms after conversion was requested
   if (waitingToCollect && conversionPending &&
       now - conversionRequestedMs >= 800) {
@@ -28,14 +31,14 @@ void runScheduledTasks() {
     requestTemperatureConversion();
     waitingToCollect = true;
     lastSensorHeartbeatMs = now;
-    // publish happens in the collect phase above, 800ms later
   }
 
+  // Water heartbeat: kick off a new (non-blocking) sample
   if (now - lastWaterHeartbeatMs >= config.waterHeartbeatIntervalMs) {
     Serial.println("sample water level");
-    sampleWaterLevel();
-    publishWaterStatus();
+    beginWaterSample();
     lastWaterHeartbeatMs = now;
+    // publishWaterStatus() is called inside updateWaterSample() on completion
   }
 
   if (now - lastAggregateHeartbeatMs >= aggregateheartbeatintervalms) {
