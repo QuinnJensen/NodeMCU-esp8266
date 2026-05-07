@@ -29,9 +29,6 @@ async function pollTick(){
   if(state.busy||state.modalOpen){schedulePoll();return;}
   try{
     await fetchLiveData();
-    // Update live data in each page without touching the settings scaffold.
-    // Notably: do NOT call showPage() here -- that resets settingsRendered
-    // and would clobber in-progress form edits.
     renderChrome();
     renderDashboard();
     renderTemps();
@@ -109,15 +106,13 @@ function renderSettings(){
   const c=state.config||{};
   const ledChecked=c.led_enabled?'checked':'';
   document.getElementById('page-settings').innerHTML=
-    // -- Sensor Names --
     `<div class='card' style='grid-column:1/-1'>`+
       `<h3>Sensor Names <span id='sn-count' class='pill' style='font-size:.7rem;margin-left:.5rem'></span></h3>`+
       `<p class='muted'>Names are persisted by 64-bit ROM address. Live readings update automatically.</p>`+
-      `<div class='actions' style='margin-bottom:.75rem'><button class='btn secondary btn-action' onclick="postScan()">Scan Bus</button></div>`+
+      `<div class='actions' style='margin-bottom:.75rem'><button id='scan-bus-btn' class='btn secondary btn-action' onclick="postScan()">Scan Bus</button></div>`+
       `<table class='table'><thead><tr><th>#</th><th>Address</th><th>Current Name</th><th>Temp</th><th>Rename</th></tr></thead>`+
       `<tbody id='sn-tbody'></tbody></table>`+
     `</div>`+
-    // -- MQTT & Prometheus --
     `<div class='grid two' style='grid-column:1/-1'><div class='card'><h3>MQTT &amp; Prometheus</h3><form class='form' onsubmit='saveServices(event)'>`+
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport??1883}'></div>`+
@@ -133,7 +128,6 @@ function renderSettings(){
       `<p><b>Water:</b><br><span class='mono small'>${esc((c.topics||{}).water||'-')}</span></p>`+
       `<p><b>Metrics URL:</b><br><span class='mono small'>http://${esc((state.status||{}).ip||'0.0.0.0')}:${c.prometheusport??9111}/metrics</span></p>`+
     `</div></div>`+
-    // -- Display & LEDs (bottom) --
     `<div class='card'>`+
       `<h3>Display &amp; LEDs</h3>`+
       `<div style='display:flex;align-items:center;justify-content:space-between;padding:.5rem 0'>`+
@@ -148,7 +142,6 @@ function renderSettings(){
       `<div class='actions' style='margin-top:.75rem'><button class='btn btn-action' onclick='saveLed()'>Save</button></div>`+
     `</div>`;
 
-  // Wire up live toggle animation
   const chk=document.getElementById('led-toggle');
   const slider=document.getElementById('led-slider');
   const knob=document.getElementById('led-knob');
@@ -233,7 +226,7 @@ function renderPages(){
   showPage(state.page);
 }
 
-// showPage() is for navigation only -- never call from pollTick.
+// showPage() is navigation-only -- never call from pollTick.
 function showPage(name){
   state.page=name;
   document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
@@ -254,18 +247,64 @@ function showPage(name){
   if(name==='files'){state.filesLoaded=false;renderFiles();}
 }
 
-// Scan: update live data + sensor table only, never stomps forms.
+// postScan: queues a bus scan on the firmware, then waits for the firmware
+// to confirm completion by watching last_rescan_ms_age reset, rather than
+// reading stale data immediately after the POST returns.
 async function postScan(){
-  setBusy(true);stopPoll();
+  setBusy(true);
+  stopPoll();
+
+  // Label feedback -- find whichever Scan button is currently visible.
+  function setScanLabel(txt){
+    document.querySelectorAll('#scan-bus-btn, .btn-scan').forEach(b=>b.textContent=txt);
+  }
+
+  // Snapshot the current rescan age so we can detect when the firmware
+  // completes a NEW scan (age drops back below the pre-scan baseline).
+  const baselineAge=(state.temps||{}).last_rescan_ms_age??Infinity;
+
   try{
+    setScanLabel('Scanning…');
     await postForm('/api/sensors/scan',{});
+
+    // Poll every 800 ms. The scan is done when last_rescan_ms_age is
+    // significantly less than the baseline (i.e. a fresh scan just ran).
+    // Give up after 15 s in case the firmware is stuck.
+    const POLL_MS=800, TIMEOUT_MS=15000;
+    const deadline=Date.now()+TIMEOUT_MS;
+    let elapsed=0;
+    let done=false;
+
+    while(Date.now()<deadline){
+      await new Promise(r=>setTimeout(r,POLL_MS));
+      elapsed+=POLL_MS;
+      setScanLabel(`Scanning… ${Math.round(elapsed/1000)}s`);
+      try{
+        const t=await fetchJson('/api/temps');
+        // A freshly completed scan will have last_rescan_ms_age < POLL_MS * 2
+        // which is always far below the pre-scan baseline.
+        if(t.last_rescan_ms_age < baselineAge){
+          state.temps=t;
+          done=true;
+          break;
+        }
+      }catch(_){/* keep waiting */}
+    }
+
+    // Whether we detected completion or timed out, grab a full data snapshot.
     await fetchLiveData();
+    setScanLabel(done?'Scan Bus':'Scan Bus (timeout)');
     renderChrome();
     renderDashboard();
     renderTemps();
     renderSensorNamesTable();
-  }catch(e){console.warn('postScan error',e);}
-  finally{setBusy(false);schedulePoll();}
+  }catch(e){
+    console.warn('postScan error',e);
+    setScanLabel('Scan Bus');
+  }finally{
+    setBusy(false);
+    schedulePoll();
+  }
 }
 
 async function postAction(url,obj={}){
