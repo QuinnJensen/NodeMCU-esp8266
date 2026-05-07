@@ -16,18 +16,28 @@ void publishAggregateStatus(bool retained) {
   Serial.println(mqtt.connected());
   if (!mqtt.connected()) return;
 
-  StaticJsonDocument<1536> doc;
-  doc["type"] = "status";
-  doc["id"] = safeDeviceId();
-  doc["online"] = true;
-  doc["ssid"] = WiFi.SSID();
-  doc["rssidbm"] = WiFi.RSSI();
-  doc["ip"] = ipToString(WiFi.localIP());
-  doc["freeheap"] = ESP.getFreeHeap();
-  doc["sensorcount"] = sensorCount;
-  doc["simulated"] = useFakeSensors;
-  doc["networkdetected"] = sensorNetworkDetected;
-  doc["prometheusport"] = config.prometheusPort;
+  StaticJsonDocument<2048> doc;
+  doc["type"]             = "status";
+  doc["id"]               = safeDeviceId();
+  doc["chipid"]           = String(ESP.getChipId(), HEX);
+  doc["mac"]              = WiFi.macAddress();
+  doc["online"]           = true;
+
+  // WiFi
+  doc["ssid"]             = WiFi.SSID();
+  doc["rssidbm"]          = WiFi.RSSI();
+  doc["ip"]               = ipToString(WiFi.localIP());
+
+  // System
+  doc["freeheap"]         = ESP.getFreeHeap();
+  doc["uptime_s"]         = millis() / 1000UL;
+  doc["mqttpublishcount"] = mqttPublishCount;
+  doc["prometheusport"]   = config.prometheusPort;
+
+  // Sensor bus
+  doc["sensorcount"]      = sensorCount;
+  doc["simulated"]        = useFakeSensors;
+  doc["networkdetected"]  = sensorNetworkDetected;
 
   String ts = currentTimestampString();
   if (ts.length()) doc["timestamp"] = ts;
@@ -37,15 +47,19 @@ void publishAggregateStatus(bool retained) {
   JsonArray sensors = doc.createNestedArray("sensors");
   for (uint8_t i = 0; i < sensorCount; i++) {
     JsonObject s = sensors.createNestedObject();
-    s["index"] = i + 1;
-    s["name"] = sensorNames[i];
-    s["address"] = sensorAddressString(i);
+    s["index"]     = i + 1;
+    s["name"]      = sensorNames[i];
+    s["address"]   = sensorAddressString(i);
     s["connected"] = sensorPresent[i];
     if (!isnan(sensorTempsC[i])) {
       s["tempc"] = sensorTempsC[i];
       s["tempf"] = sensorTempsC[i] * 9.0f / 5.0f + 32.0f;
     }
   }
+
+  // Debug: log serialized size so we can catch future truncation early
+  Serial.print("[MQTT] aggregate doc size=");
+  Serial.println(measureJson(doc));
 
   if (publishJsonDocToTopic(statusTopic, doc, retained))
     setStatusMessage("publishing agg", 1500);
@@ -55,12 +69,12 @@ void publishPerSensorStatus(uint8_t i, bool retained) {
   if (!mqtt.connected() || i >= sensorCount) return;
 
   StaticJsonDocument<512> doc;
-  doc["type"] = "sensor";
-  doc["id"] = safeDeviceId();
-  doc["online"] = true;
-  doc["index"] = i + 1;
-  doc["name"] = sensorNames[i];
-  doc["address"] = sensorAddressString(i);
+  doc["type"]      = "sensor";
+  doc["id"]        = safeDeviceId();
+  doc["online"]    = true;
+  doc["index"]     = i + 1;
+  doc["name"]      = sensorNames[i];
+  doc["address"]   = sensorAddressString(i);
   doc["connected"] = sensorPresent[i];
   doc["simulated"] = useFakeSensors;
 
@@ -91,8 +105,8 @@ void publishWaterStatus(bool retained) {
   if (!mqtt.connected()) return;
 
   StaticJsonDocument<512> doc;
-  doc["type"] = "water";
-  doc["id"] = safeDeviceId();
+  doc["type"]   = "water";
+  doc["id"]     = safeDeviceId();
   doc["online"] = true;
 
   String ts = currentTimestampString();
@@ -108,9 +122,9 @@ void publishCommandResult(const char* type, bool ok, const char* msg) {
   if (!mqtt.connected()) return;
 
   StaticJsonDocument<256> reply;
-  reply["type"] = type ? type : "result";
-  reply["id"] = safeDeviceId();
-  reply["ok"] = ok;
+  reply["type"]    = type ? type : "result";
+  reply["id"]      = safeDeviceId();
+  reply["ok"]      = ok;
   reply["message"] = msg ? msg : "";
 
   if (!publishJsonDocToTopic(resultsTopic, reply, false))
