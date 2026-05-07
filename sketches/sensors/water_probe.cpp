@@ -26,7 +26,7 @@ uint8_t classifyWaterLevel(uint16_t adc) {
 }
 
 void sampleWaterLevel() {
-  waterProbing = true;   // display shows "probing" while this function runs
+  waterProbing = true;   // display shows "[probing]" while this function runs
 
   pinMode(probeOnPin, OUTPUT);
   pinMode(blueLedPin, OUTPUT);
@@ -36,6 +36,9 @@ void sampleWaterLevel() {
 
   uint16_t quickAdc = analogRead(A0);
   if (quickAdc <= config.waterThresholds[WATER_NO_PROBE]) {
+    // No probe present -- brief visual feedback then done
+    pulseSpinnerDot(200);
+    renderDisplay();
     waterProbePresent = false;
     waterValid        = true;
     waterAdcRaw       = quickAdc;
@@ -43,10 +46,13 @@ void sampleWaterLevel() {
     lastWaterSampleMs = millis();
     digitalWrite(probeOnPin, LOW);
     if (config.ledEnabled) setBlueLed(false);
-    waterProbing = false;  // done -- no probe path
+    waterProbing = false;
     return;
   }
 
+  // Probe present -- average ADC over the full measurement window.
+  // Keep the blue LED on and the spinner center dot lit the entire time
+  // by calling pulseSpinnerDot() and renderDisplay() each batch.
   waterProbePresent = true;
   uint32_t sum          = 0;
   uint32_t totalSamples = 0;
@@ -58,6 +64,9 @@ void sampleWaterLevel() {
       sum += analogRead(A0);
     }
     totalSamples += batchReads;
+    // Keep center dot alive for at least one more display refresh
+    pulseSpinnerDot(displayintervalms * 2);
+    renderDisplay();
     delay(50);
   }
 
@@ -69,7 +78,7 @@ void sampleWaterLevel() {
   waterLevelIndex   = classifyWaterLevel(waterAdcRaw);
   waterValid        = true;
   lastWaterSampleMs = millis();
-  waterProbing      = false;  // done -- results now in waterLevelIndex
+  waterProbing      = false;  // results now in waterLevelIndex
 }
 
 void appendWaterToJson(JsonDocument& doc) {
