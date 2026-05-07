@@ -21,13 +21,13 @@
 
 // Called by lib/shared/mqtt_client immediately after successful broker connect+subscribe
 static void onMqttConnected() {
-  // Do a forced scan + blocking read so first retained publish has real data
+  // Do a forced scan + blocking read so first publish has real data
   scanSensors(true);
   readTemperatures();
   sampleWaterLevel();
-  publishAggregateStatus(true);
-  publishPerSensorStatuses(true);
-  publishWaterStatus(true);
+  publishAggregateStatus();
+  publishPerSensorStatuses();
+  publishWaterStatus();
   mqttOnlinePublished = true;
 }
 

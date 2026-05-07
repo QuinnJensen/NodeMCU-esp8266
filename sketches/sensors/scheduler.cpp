@@ -17,7 +17,7 @@ void runScheduledTasks() {
   if (waitingToCollect && conversionPending &&
       now - conversionRequestedMs >= 800) {
     collectTemperatureResults();
-    publishPerSensorStatuses(false);
+    publishPerSensorStatuses();
     waitingToCollect = false;
   }
 
@@ -34,13 +34,13 @@ void runScheduledTasks() {
   if (now - lastWaterHeartbeatMs >= config.waterHeartbeatIntervalMs) {
     Serial.println("sample water level");
     sampleWaterLevel();
-    publishWaterStatus(false);
+    publishWaterStatus();
     lastWaterHeartbeatMs = now;
   }
 
   if (now - lastAggregateHeartbeatMs >= aggregateheartbeatintervalms) {
     Serial.println("heartbeat");
-    publishAggregateStatus(false);
+    publishAggregateStatus();
     lastAggregateHeartbeatMs = now;
   }
 

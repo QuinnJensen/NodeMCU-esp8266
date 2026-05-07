@@ -26,17 +26,17 @@ void handleCommandJson(const String& payload) {
     readTemperatures();
     lastSensorSampleMs = millis();
     sampleWaterLevel();
-    publishAggregateStatus(false);
-    publishPerSensorStatuses(false);
-    publishWaterStatus(false);
+    publishAggregateStatus();
+    publishPerSensorStatuses();
+    publishWaterStatus();
     setStatusMessage("scanpublish", 1500);
     return;
   }
 
   if (!strcmp(command, "water") || !strcmp(command, "waterstatus")) {
     sampleWaterLevel();
-    publishAggregateStatus(false);
-    publishWaterStatus(false);
+    publishAggregateStatus();
+    publishWaterStatus();
     setStatusMessage("water publish", 1500);
     return;
   }
