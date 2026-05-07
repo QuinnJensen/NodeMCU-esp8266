@@ -28,10 +28,17 @@ void setup() {
   initDisplayUi();
   setStatusMessage("booting", 1500);
 
-  // show the initial startup / countdown screen
-  showStartupReconfigCountdown(10);   // or whatever you use
+  // Register display callbacks so wifi_portal can drive the OLED
+  // without depending on display_ui.h directly
+  WifiPortalDisplay dpCb;
+  dpCb.showPortal   = showPortalScreen;
+  dpCb.showCountdown = showStartupReconfigCountdown;
+  dpCb.setStatus    = setStatusMessage;
+  setWifiPortalDisplayCallbacks(dpCb);
+
+  showStartupReconfigCountdown(10);
   startupDisplayActive = true;
-  startupDisplayUntilMs = millis() + 10000UL; // keep it for 10s
+  startupDisplayUntilMs = millis() + 10000UL;
 
   if (!LittleFS.begin()) {
     setStatusMessage("LittleFS fail", 3000);

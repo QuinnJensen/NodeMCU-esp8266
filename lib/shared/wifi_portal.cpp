@@ -5,8 +5,24 @@
 #include <WiFiManager.h>
 #include "app_state.h"
 #include "app_config.h"
-#include "display_ui.h"
 #include "util.h"
+
+static WifiPortalDisplay sDisplay;
+
+void setWifiPortalDisplayCallbacks(const WifiPortalDisplay& cb) {
+  sDisplay = cb;
+}
+
+// Convenience wrappers — no-op if callback not registered
+static void _showPortal() {
+  if (sDisplay.showPortal) sDisplay.showPortal();
+}
+static void _showCountdown(uint8_t s) {
+  if (sDisplay.showCountdown) sDisplay.showCountdown(s);
+}
+static void _setStatus(const String& msg, unsigned long holdMs = 3000) {
+  if (sDisplay.setStatus) sDisplay.setStatus(msg, holdMs);
+}
 
 void saveConfigCallback() {
   shouldSaveConfig = true;
@@ -34,13 +50,13 @@ void startPortalAndConnect(bool forcePortal) {
   wm.addParameter(&pDeviceId);
   wm.addParameter(&pPromPort);
   portalActive = true;
-  showPortalScreen();
+  _showPortal();
   bool ok;
   if (forcePortal) ok = wm.startConfigPortal("TempSensorSetup");
   else ok = wm.autoConnect("TempSensorSetup");
   portalActive = false;
   if (!ok) {
-    setStatusMessage("portal timeout", 2000);
+    _setStatus("portal timeout", 2000);
     delay(1000);
     ESP.restart();
     delay(1000);
@@ -58,9 +74,8 @@ void startPortalAndConnect(bool forcePortal) {
     saveConfig();
     shouldSaveConfig = false;
   }
-  setStatusMessage("ip " + ipToString(WiFi.localIP()), 3000);
+  _setStatus("ip " + ipToString(WiFi.localIP()), 3000);
 }
-
 
 bool startupReconfigRequested() {
   pinMode(forceportalpin, INPUT_PULLUP);
@@ -70,7 +85,7 @@ bool startupReconfigRequested() {
     unsigned long elapsed = millis() - start;
     uint8_t secondsLeft = (uint8_t)((startupreconfigcountdownms - elapsed + 999UL) / 1000UL);
     if (secondsLeft != lastShown) {
-      showStartupReconfigCountdown(secondsLeft);
+      _showCountdown(secondsLeft);
       lastShown = secondsLeft;
     }
     if (digitalRead(forceportalpin) == LOW) {
@@ -96,22 +111,22 @@ void ensureWiFi() {
     lastRssi = WiFi.RSSI();
     return;
   }
-  setStatusMessage("connecting wifi", 2000);
+  _setStatus("connecting wifi", 2000);
   WiFi.reconnect();
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < 10000UL) delay(100);
   if (WiFi.status() == WL_CONNECTED) {
     lastRssi = WiFi.RSSI();
-    setStatusMessage("ip " + ipToString(WiFi.localIP()), 3000);
+    _setStatus("ip " + ipToString(WiFi.localIP()), 3000);
   }
 }
 
 void runStartupPortalIfNeeded() {
   bool forcePortal = forcePortalRequested() || startupReconfigRequested();
   if (forcePortal) {
-    showPortalScreen();
+    _showPortal();
     startupDisplayActive = true;
-    startupDisplayUntilMs = millis() + 600000UL; // keep portal screen up
+    startupDisplayUntilMs = millis() + 600000UL;
     startPortalAndConnect(true);
   } else {
     startPortalAndConnect(false);
