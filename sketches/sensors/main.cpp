@@ -21,13 +21,13 @@
 
 // Called by lib/shared/mqtt_client immediately after successful broker connect+subscribe
 static void onMqttConnected() {
-  // Do a forced scan + blocking read so first publish has real data
+  // Kick off sensor + water reads; publishes fire when each completes
   scanSensors(true);
   readTemperatures();
-  sampleWaterLevel();
+  beginWaterSample();
   publishAggregateStatus();
   publishPerSensorStatuses();
-  publishWaterStatus();
+  // publishWaterStatus() fires automatically when the water state machine finishes
   mqttOnlinePublished = true;
 }
 
@@ -80,8 +80,6 @@ void setup() {
   startMainWebUi();
   startMetricsServer();
   startMqttIfWifiReady();
-  // NOTE: no initialSampleAndPublish() here -- MQTT not connected yet.
-  // onMqttConnected() fires automatically after first successful broker connect.
 }
 
 void loop() {

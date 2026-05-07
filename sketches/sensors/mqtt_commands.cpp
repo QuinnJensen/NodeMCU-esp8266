@@ -25,19 +25,16 @@ void handleCommandJson(const String& payload) {
     scanSensors(true);
     readTemperatures();
     lastSensorSampleMs = millis();
-    sampleWaterLevel();
+    beginWaterSample();   // non-blocking; publishWaterStatus() fires on completion
     publishAggregateStatus();
     publishPerSensorStatuses();
-    publishWaterStatus();
     setStatusMessage("scanpublish", 1500);
     return;
   }
 
   if (!strcmp(command, "water") || !strcmp(command, "waterstatus")) {
-    sampleWaterLevel();
-    publishAggregateStatus();
-    publishWaterStatus();
-    setStatusMessage("water publish", 1500);
+    beginWaterSample();   // non-blocking; publishWaterStatus() fires on completion
+    setStatusMessage("water queued", 1500);
     return;
   }
 

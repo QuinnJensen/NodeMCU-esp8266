@@ -273,8 +273,6 @@ void serviceDeferredWebActions() {
   }
   if (webRequestWaterSample) {
     webRequestWaterSample = false;
-    setStatusMessage("water running", 1200);
-    sampleWaterLevel();
-    yield();
+    beginWaterSample();   // non-blocking; state machine drives it from here
   }
 }

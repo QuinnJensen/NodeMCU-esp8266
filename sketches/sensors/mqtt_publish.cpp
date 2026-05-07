@@ -143,9 +143,8 @@ void publishCommandResult(const char* type, bool ok, const char* msg) {
 void initialSampleAndPublish() {
   scanSensors(true);
   readTemperatures();
-  sampleWaterLevel();
+  beginWaterSample();   // non-blocking; publishWaterStatus() fires on completion
   publishAggregateStatus();
   publishPerSensorStatuses();
-  publishWaterStatus();
   mqttOnlinePublished = true;
 }
