@@ -9,9 +9,6 @@ function postForm(url,obj){const fd=new URLSearchParams();Object.entries(obj).fo
 
 async function fetchJson(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(url);return r.json();}
 
-// Fetch the three live endpoints sequentially -- one TCP connection at a time.
-// config is excluded; it is loaded once on startup and only re-fetched after
-// a user action that might change it (saveServices, saveWater, etc.).
 async function fetchLiveData(){
   state.status = await fetchJson('/api/status');
   state.temps  = await fetchJson('/api/temps');
@@ -22,7 +19,6 @@ async function fetchConfig(){
   state.config = await fetchJson('/api/config');
 }
 
-// Full refresh: live data + re-render. Used by action buttons.
 async function refreshAll(){
   stopPoll();
   try{
@@ -33,7 +29,6 @@ async function refreshAll(){
   schedulePoll();
 }
 
-// Lightweight background tick: live data only, no config re-fetch.
 async function pollTick(){
   if(state.busy||state.modalOpen){schedulePoll();return;}
   try{
@@ -74,24 +69,23 @@ function renderWater(){
   document.getElementById('page-water').innerHTML=`<div class='grid two'><div class='card'><h3>Live Water Probe</h3><p><b>Level:</b> ${esc(w.level||'-')}</p><p><b>Probe present:</b> ${fmtBool(!!w.probepresent)}</p><p><b>Reading valid:</b> ${fmtBool(!!w.valid)}</p><p><b>ADC:</b> ${w.adc ?? 0}</p><p><b>Last sample age:</b> ${ageSec(w.sampleagems)}</p><div class='actions'><button class='btn btn-action' onclick="postAction('/api/water/sample')">Force Probe</button><button class='btn secondary' onclick='refreshAll()'>Refresh</button></div></div><div class='card'><h3>Thresholds</h3><p class='mono small'>noprobe: ${th[0]??'-'} | 40gal: ${th[1]??'-'} | 15-40gal: ${th[2]??'-'} | 5-15gal: ${th[3]??'-'} | 5gal: ${th[4]??'-'}</p><form class='form' onsubmit='saveWater(event)'><div class='field'><label>Heartbeat interval (ms)</label><input name='intervalms' type='number' min='1000' max='86400000' value='${(cfg.water||{}).intervalms ?? 60000}'></div><div class='grid two'><div class='field'><label>No probe ADC</label><input name='t0' type='number' min='0' max='1023' value='${th[0]??20}'></div><div class='field'><label>40 gal ADC</label><input name='t1' type='number' min='0' max='1023' value='${th[1]??44}'></div><div class='field'><label>15-40 gal ADC</label><input name='t2' type='number' min='0' max='1023' value='${th[2]??268}'></div><div class='field'><label>5-15 gal ADC</label><input name='t3' type='number' min='0' max='1023' value='${th[3]??485}'></div><div class='field'><label>5 gal ADC</label><input name='t4' type='number' min='0' max='1023' value='${th[4]??1023}'></div></div><div class='actions'><button class='btn btn-action' type='submit'>Save Water Settings</button></div></form></div></div>`;
 }
 
-function renderNames(){
-  const t=state.temps||{};
-  const sensors=t.sensors||[];
-  document.getElementById('page-names').innerHTML=`<div class='card'><h3>Rename Sensors</h3><p class='muted'>Names are persisted by 64-bit ROM address, so rediscovery keeps the mapping.</p><table class='table'><thead><tr><th>#</th><th>Address</th><th>Current Name</th><th>Rename</th></tr></thead><tbody>${sensors.length ? sensors.map(s=>`<tr><td>${s.index}</td><td class='mono'>${esc(s.address)}</td><td>${esc(s.name)}</td><td><form class='row' onsubmit='renameSensor(event,${s.index})'><input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:220px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'><button class='btn btn-action' type='submit'>Save</button></form></td></tr>`).join('') : `<tr><td colspan='4' class='muted'>No active sensors to rename.</td></tr>`}</tbody></table></div>`;
-}
-
 function renderWifi(){
   const s=state.status||{};
   document.getElementById('page-wifi').innerHTML=`<div class='grid two'><div class='card'><h3>WiFi Status</h3><p><b>Connected:</b> ${fmtBool(!!s.wifi_connected)}</p><p><b>SSID:</b> ${esc(s.ssid||'-')}</p><p><b>IP:</b> <span class='mono'>${esc(s.ip||'-')}</span></p><p><b>RSSI:</b> ${s.rssidbm ?? '-'} dBm</p></div><div class='card'><h3>WiFi Setup</h3><div class='note'>WiFi credentials are still handled by the startup portal in the current firmware layout. This page is reserved for the future always-on WiFi credential editor.</div><p class='footer-note'>That keeps this web UI expansion aligned with your current modules, since WiFi credentials are not yet stored in app_config.</p></div></div>`;
 }
 
-function renderServices(){
+function renderSettings(){
   const c=state.config||{};
-  document.getElementById('page-services').innerHTML=`<div class='grid two'><div class='card'><h3>MQTT & Prometheus</h3><form class='form' onsubmit='saveServices(event)'><div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div><div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport ?? 1883}'></div><div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' min='1' max='65535' value='${c.prometheusport ?? 9111}'></div></div><div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div><div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div><div class='actions'><button class='btn btn-action' type='submit'>Save Services</button></div></form></div><div class='card'><h3>Resolved Topics</h3><p><b>Command:</b><br><span class='mono small'>${esc((c.topics||{}).command||'-')}</span></p><p><b>Status:</b><br><span class='mono small'>${esc((c.topics||{}).status||'-')}</span></p><p><b>Results:</b><br><span class='mono small'>${esc((c.topics||{}).results||'-')}</span></p><p><b>Water:</b><br><span class='mono small'>${esc((c.topics||{}).water||'-')}</span></p><p><b>Metrics URL:</b><br><span class='mono small'>http://${esc((state.status||{}).ip||'0.0.0.0')}:${c.prometheusport ?? 9111}/metrics</span></p></div></div>`;
+  const t=state.temps||{};
+  const sensors=t.sensors||[];
+  document.getElementById('page-settings').innerHTML=
+    // -- Sensor Names card --
+    `<div class='card' style='grid-column:1/-1'><h3>Sensor Names</h3><p class='muted'>Names are persisted by 64-bit ROM address, so rediscovery keeps the mapping.</p><table class='table'><thead><tr><th>#</th><th>Address</th><th>Current Name</th><th>Rename</th></tr></thead><tbody>${sensors.length ? sensors.map(s=>`<tr><td>${s.index}</td><td class='mono'>${esc(s.address)}</td><td>${esc(s.name)}</td><td><form class='row' onsubmit='renameSensor(event,${s.index})'><input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:220px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'><button class='btn btn-action' type='submit'>Save</button></form></td></tr>`).join('') : `<tr><td colspan='4' class='muted'>No active sensors to rename.</td></tr>`}</tbody></table></div>`+
+    // -- MQTT & Prometheus card --
+    `<div class='grid two' style='grid-column:1/-1'><div class='card'><h3>MQTT &amp; Prometheus</h3><form class='form' onsubmit='saveServices(event)'><div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div><div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport ?? 1883}'></div><div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' min='1' max='65535' value='${c.prometheusport ?? 9111}'></div></div><div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div><div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div><div class='actions'><button class='btn btn-action' type='submit'>Save Services</button></div></form></div><div class='card'><h3>Resolved Topics</h3><p><b>Command:</b><br><span class='mono small'>${esc((c.topics||{}).command||'-')}</span></p><p><b>Status:</b><br><span class='mono small'>${esc((c.topics||{}).status||'-')}</span></p><p><b>Results:</b><br><span class='mono small'>${esc((c.topics||{}).results||'-')}</span></p><p><b>Water:</b><br><span class='mono small'>${esc((c.topics||{}).water||'-')}</span></p><p><b>Metrics URL:</b><br><span class='mono small'>http://${esc((state.status||{}).ip||'0.0.0.0')}:${c.prometheusport ?? 9111}/metrics</span></p></div></div>`;
 }
 
 function renderFiles(){
-  // Only load once per visit; subsequent background polls skip this page entirely.
   if(state.filesLoaded)return;
   state.filesLoaded=true;
   const el=document.getElementById('page-files');
@@ -144,10 +138,8 @@ function renderPages(){
   renderDashboard();
   renderTemps();
   renderWater();
-  renderNames();
   renderWifi();
-  renderServices();
-  // files page is NOT re-rendered on background polls -- only on explicit nav
+  renderSettings();
   showPage(state.page);
 }
 
@@ -161,9 +153,8 @@ function showPage(name){
     dashboard: ['Dashboard','Live node overview'],
     temps:     ['Temperature Network','Monitor and rescan the 1-Wire sensor bus'],
     water:     ['Water Probe','Live level status and threshold configuration'],
-    names:     ['Sensor Names','Persistent address-based sensor naming'],
     wifi:      ['WiFi','Current connection state'],
-    services:  ['MQTT & Prometheus','Broker, topics, identity, and metrics'],
+    settings:  ['Settings','Sensor names, MQTT broker, topics, identity, and metrics'],
     files:     ['LittleFS Files','Browse and inspect files stored on the device filesystem']
   };
   document.getElementById('page-title').textContent=(titles[name]||['',''])[0];
@@ -176,7 +167,6 @@ async function postAction(url,obj={}){
   stopPoll();
   try{
     await postForm(url,obj);
-    // After a mutating action re-fetch config too in case it changed
     await fetchLiveData();
     state.config=await fetchJson('/api/config');
     renderChrome();
@@ -222,7 +212,6 @@ async function renameSensor(ev,index){
 
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
 
-// Boot: load config once, then live data, then start polling
 (async()=>{
   try{
     state.config=await fetchJson('/api/config');
