@@ -34,7 +34,8 @@ async function pollTick(){
     renderTemps();
     renderWater();
     renderWifi();
-    renderSensorNamesTable();
+    // Patch-only: update Temp column without touching the Rename inputs.
+    renderSensorNamesTable(false);
   }catch(e){console.warn('poll error',e);}
   schedulePoll();
 }
@@ -74,32 +75,62 @@ function renderWifi(){
   document.getElementById('page-wifi').innerHTML=`<div class='grid two'><div class='card'><h3>WiFi Status</h3><p><b>Connected:</b> ${fmtBool(!!s.wifi_connected)}</p><p><b>SSID:</b> ${esc(s.ssid||'-')}</p><p><b>IP:</b> <span class='mono'>${esc(s.ip||'-')}</span></p><p><b>RSSI:</b> ${s.rssidbm??'-'} dBm</p></div><div class='card'><h3>WiFi Setup</h3><div class='note'>WiFi credentials are still handled by the startup portal in the current firmware layout. This page is reserved for the future always-on WiFi credential editor.</div><p class='footer-note'>That keeps this web UI expansion aligned with your current modules, since WiFi credentials are not yet stored in app_config.</p></div></div>`;
 }
 
-// Patches ONLY the sensor table body and count badge -- never touches form inputs.
-function renderSensorNamesTable(){
+// renderSensorNamesTable(rebuild)
+//
+// rebuild=true  (default): full tbody replacement. Use after first render,
+//               a successful rename, or a bus scan -- when the row roster
+//               itself may have changed.
+//
+// rebuild=false: PATCH MODE -- walks existing <tr> elements and updates
+//               ONLY td[3] (Temp column) via textContent. td[4] (the
+//               Rename <input> and Save button) is never touched, so
+//               any in-progress edits survive the poll tick.
+function renderSensorNamesTable(rebuild=true){
   const tbody=document.getElementById('sn-tbody');
   const countEl=document.getElementById('sn-count');
   if(!tbody)return;
   const sensors=(state.temps||{}).sensors||[];
   if(countEl)countEl.textContent=sensors.length;
-  tbody.innerHTML=sensors.length
-    ?sensors.map(s=>{
-        const c=s.tempc===null?'-':Number(s.tempc).toFixed(1)+'°C / '+tempF(s.tempc)+'°F';
-        return `<tr>`+
-          `<td>${s.index}</td>`+
-          `<td class='mono'>${esc(s.address)}</td>`+
-          `<td>${esc(s.name)}</td>`+
-          `<td class='mono small ${s.connected?'':'muted'}'>${s.connected?c:'disconnected'}</td>`+
-          `<td><form class='row' onsubmit='renameSensor(event,${s.index})'>`+
-            `<input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:200px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'>`+
-            `<button class='btn btn-action' type='submit'>Save</button>`+
-          `</form></td>`+
-        `</tr>`;
-      }).join('')
-    :`<tr><td colspan='5' class='muted'>No active sensors. Run a bus scan first.</td></tr>`;
+
+  if(rebuild){
+    tbody.innerHTML=sensors.length
+      ?sensors.map(s=>{
+          const c=s.tempc===null?'-':Number(s.tempc).toFixed(1)+'°C / '+tempF(s.tempc)+'°F';
+          return `<tr data-idx='${s.index}'>`+
+            `<td>${s.index}</td>`+
+            `<td class='mono'>${esc(s.address)}</td>`+
+            `<td>${esc(s.name)}</td>`+
+            `<td class='mono small ${s.connected?'':'muted'}'>${s.connected?c:'disconnected'}</td>`+
+            `<td><form class='row' onsubmit='renameSensor(event,${s.index})'>`+
+              `<input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:200px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'>`+
+              `<button class='btn btn-action' type='submit'>Save</button>`+
+            `</form></td>`+
+          `</tr>`;
+        }).join('')
+      :`<tr><td colspan='5' class='muted'>No active sensors. Run a bus scan first.</td></tr>`;
+    return;
+  }
+
+  // Patch mode: update only the Temp cell in each existing row.
+  // Match by data-idx so order doesn't matter.
+  const byIdx={};
+  sensors.forEach(s=>byIdx[s.index]=s);
+  tbody.querySelectorAll('tr[data-idx]').forEach(tr=>{
+    const s=byIdx[tr.dataset.idx];
+    if(!s)return;
+    const td=tr.cells[3];
+    if(!td)return;
+    const c=s.tempc===null?'-':Number(s.tempc).toFixed(1)+'°C / '+tempF(s.tempc)+'°F';
+    const newText=s.connected?c:'disconnected';
+    if(td.textContent!==newText){
+      td.textContent=newText;
+      td.className='mono small '+(s.connected?'':'muted');
+    }
+  });
 }
 
 // Renders the static page scaffold ONCE per navigation visit.
-// NEVER call this from pollTick -- use renderSensorNamesTable() for live data.
+// NEVER call this from pollTick -- use renderSensorNamesTable(false) for live data.
 function renderSettings(){
   if(state.settingsRendered)return;
   state.settingsRendered=true;
@@ -151,7 +182,8 @@ function renderSettings(){
     knob.style.background=chk.checked?'#fff':'#888';
   });
 
-  renderSensorNamesTable();
+  // Full rebuild on first render -- roster is fresh.
+  renderSensorNamesTable(true);
 }
 
 function forceRenderSettings(){state.settingsRendered=false;renderSettings();}
@@ -222,7 +254,8 @@ function renderPages(){
   renderWater();
   renderWifi();
   renderSettings();
-  renderSensorNamesTable();
+  // Full rebuild here since we just navigated or refreshed.
+  renderSensorNamesTable(true);
   showPage(state.page);
 }
 
@@ -247,29 +280,20 @@ function showPage(name){
   if(name==='files'){state.filesLoaded=false;renderFiles();}
 }
 
-// postScan: queues a bus scan on the firmware, then waits for the firmware
-// to confirm completion by watching last_rescan_ms_age reset, rather than
-// reading stale data immediately after the POST returns.
 async function postScan(){
   setBusy(true);
   stopPoll();
 
-  // Label feedback -- find whichever Scan button is currently visible.
   function setScanLabel(txt){
     document.querySelectorAll('#scan-bus-btn, .btn-scan').forEach(b=>b.textContent=txt);
   }
 
-  // Snapshot the current rescan age so we can detect when the firmware
-  // completes a NEW scan (age drops back below the pre-scan baseline).
   const baselineAge=(state.temps||{}).last_rescan_ms_age??Infinity;
 
   try{
     setScanLabel('Scanning…');
     await postForm('/api/sensors/scan',{});
 
-    // Poll every 800 ms. The scan is done when last_rescan_ms_age is
-    // significantly less than the baseline (i.e. a fresh scan just ran).
-    // Give up after 15 s in case the firmware is stuck.
     const POLL_MS=800, TIMEOUT_MS=15000;
     const deadline=Date.now()+TIMEOUT_MS;
     let elapsed=0;
@@ -281,23 +305,21 @@ async function postScan(){
       setScanLabel(`Scanning… ${Math.round(elapsed/1000)}s`);
       try{
         const t=await fetchJson('/api/temps');
-        // A freshly completed scan will have last_rescan_ms_age < POLL_MS * 2
-        // which is always far below the pre-scan baseline.
         if(t.last_rescan_ms_age < baselineAge){
           state.temps=t;
           done=true;
           break;
         }
-      }catch(_){/* keep waiting */}
+      }catch(_){}
     }
 
-    // Whether we detected completion or timed out, grab a full data snapshot.
     await fetchLiveData();
     setScanLabel(done?'Scan Bus':'Scan Bus (timeout)');
     renderChrome();
     renderDashboard();
     renderTemps();
-    renderSensorNamesTable();
+    // Full rebuild after scan -- sensor roster may have changed.
+    renderSensorNamesTable(true);
   }catch(e){
     console.warn('postScan error',e);
     setScanLabel('Scan Bus');
@@ -318,7 +340,7 @@ async function postAction(url,obj={}){
     renderTemps();
     renderWater();
     renderWifi();
-    renderSensorNamesTable();
+    renderSensorNamesTable(true);
     showPage(state.page);
   }catch(e){console.warn('postAction error',e);}
   finally{setBusy(false);schedulePoll();}
@@ -359,7 +381,8 @@ async function renameSensor(ev,index){
     await postForm('/api/sensors/rename',{index,name:fd.get('name')});
     await fetchLiveData();
     renderChrome();
-    renderSensorNamesTable();
+    // Full rebuild after a save so Current Name column reflects the new name.
+    renderSensorNamesTable(true);
   }catch(e){console.warn(e);}finally{setBusy(false);schedulePoll();}
 }
 
