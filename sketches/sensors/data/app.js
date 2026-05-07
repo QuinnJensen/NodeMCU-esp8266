@@ -1,4 +1,4 @@
-const state={status:null,temps:null,water:null,config:null,busy:false,page:'dashboard',pollTimer:null,modalOpen:false,filesLoaded:false};
+const state={status:null,temps:null,water:null,config:null,busy:false,page:'dashboard',pollTimer:null,modalOpen:false,filesLoaded:false,settingsRendered:false};
 
 function esc(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
 function fmtBool(v){return v?'Yes':'No';}
@@ -74,16 +74,21 @@ function renderWifi(){
   document.getElementById('page-wifi').innerHTML=`<div class='grid two'><div class='card'><h3>WiFi Status</h3><p><b>Connected:</b> ${fmtBool(!!s.wifi_connected)}</p><p><b>SSID:</b> ${esc(s.ssid||'-')}</p><p><b>IP:</b> <span class='mono'>${esc(s.ip||'-')}</span></p><p><b>RSSI:</b> ${s.rssidbm ?? '-'} dBm</p></div><div class='card'><h3>WiFi Setup</h3><div class='note'>WiFi credentials are still handled by the startup portal in the current firmware layout. This page is reserved for the future always-on WiFi credential editor.</div><p class='footer-note'>That keeps this web UI expansion aligned with your current modules, since WiFi credentials are not yet stored in app_config.</p></div></div>`;
 }
 
+// Renders once per page visit and after a successful save.
+// Background polls skip this entirely to avoid clobbering in-progress edits.
 function renderSettings(){
+  if(state.settingsRendered)return;
+  state.settingsRendered=true;
   const c=state.config||{};
   const t=state.temps||{};
   const sensors=t.sensors||[];
   document.getElementById('page-settings').innerHTML=
-    // -- Sensor Names card --
     `<div class='card' style='grid-column:1/-1'><h3>Sensor Names</h3><p class='muted'>Names are persisted by 64-bit ROM address, so rediscovery keeps the mapping.</p><table class='table'><thead><tr><th>#</th><th>Address</th><th>Current Name</th><th>Rename</th></tr></thead><tbody>${sensors.length ? sensors.map(s=>`<tr><td>${s.index}</td><td class='mono'>${esc(s.address)}</td><td>${esc(s.name)}</td><td><form class='row' onsubmit='renameSensor(event,${s.index})'><input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:220px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'><button class='btn btn-action' type='submit'>Save</button></form></td></tr>`).join('') : `<tr><td colspan='4' class='muted'>No active sensors to rename.</td></tr>`}</tbody></table></div>`+
-    // -- MQTT & Prometheus card --
     `<div class='grid two' style='grid-column:1/-1'><div class='card'><h3>MQTT &amp; Prometheus</h3><form class='form' onsubmit='saveServices(event)'><div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div><div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport ?? 1883}'></div><div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' min='1' max='65535' value='${c.prometheusport ?? 9111}'></div></div><div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div><div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div><div class='actions'><button class='btn btn-action' type='submit'>Save Services</button></div></form></div><div class='card'><h3>Resolved Topics</h3><p><b>Command:</b><br><span class='mono small'>${esc((c.topics||{}).command||'-')}</span></p><p><b>Status:</b><br><span class='mono small'>${esc((c.topics||{}).status||'-')}</span></p><p><b>Results:</b><br><span class='mono small'>${esc((c.topics||{}).results||'-')}</span></p><p><b>Water:</b><br><span class='mono small'>${esc((c.topics||{}).water||'-')}</span></p><p><b>Metrics URL:</b><br><span class='mono small'>http://${esc((state.status||{}).ip||'0.0.0.0')}:${c.prometheusport ?? 9111}/metrics</span></p></div></div>`;
 }
+
+// Call this after a successful save to refresh the page with new values.
+function forceRenderSettings(){state.settingsRendered=false;renderSettings();}
 
 function renderFiles(){
   if(state.filesLoaded)return;
@@ -139,7 +144,7 @@ function renderPages(){
   renderTemps();
   renderWater();
   renderWifi();
-  renderSettings();
+  renderSettings();  // no-op if already rendered and not forced
   showPage(state.page);
 }
 
@@ -159,6 +164,7 @@ function showPage(name){
   };
   document.getElementById('page-title').textContent=(titles[name]||['',''])[0];
   document.getElementById('page-subtitle').textContent=(titles[name]||['',''])[1];
+  if(name==='settings'){state.settingsRendered=false;renderSettings();}
   if(name==='files'){state.filesLoaded=false;renderFiles();}
 }
 
@@ -183,7 +189,8 @@ async function saveServices(ev){
     await postForm('/api/config/services',Object.fromEntries(fd.entries()));
     await fetchLiveData();
     state.config=await fetchJson('/api/config');
-    renderChrome();renderPages();
+    renderChrome();
+    forceRenderSettings();
   }catch(e){console.warn(e);}finally{setBusy(false);schedulePoll();}
 }
 
@@ -206,7 +213,8 @@ async function renameSensor(ev,index){
   try{
     await postForm('/api/sensors/rename',{index,name:fd.get('name')});
     await fetchLiveData();
-    renderChrome();renderPages();
+    renderChrome();
+    forceRenderSettings();
   }catch(e){console.warn(e);}finally{setBusy(false);schedulePoll();}
 }
 
