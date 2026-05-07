@@ -29,13 +29,15 @@ async function pollTick(){
   if(state.busy||state.modalOpen){schedulePoll();return;}
   try{
     await fetchLiveData();
+    // Update live data in each page without touching the settings scaffold.
+    // Notably: do NOT call showPage() here -- that resets settingsRendered
+    // and would clobber in-progress form edits.
     renderChrome();
     renderDashboard();
     renderTemps();
     renderWater();
     renderWifi();
-    renderSensorNamesTable(); // safe -- never touches form inputs
-    showPage(state.page);
+    renderSensorNamesTable();
   }catch(e){console.warn('poll error',e);}
   schedulePoll();
 }
@@ -79,7 +81,7 @@ function renderWifi(){
 function renderSensorNamesTable(){
   const tbody=document.getElementById('sn-tbody');
   const countEl=document.getElementById('sn-count');
-  if(!tbody)return; // settings page not yet rendered, skip
+  if(!tbody)return;
   const sensors=(state.temps||{}).sensors||[];
   if(countEl)countEl.textContent=sensors.length;
   tbody.innerHTML=sensors.length
@@ -89,7 +91,7 @@ function renderSensorNamesTable(){
           `<td>${s.index}</td>`+
           `<td class='mono'>${esc(s.address)}</td>`+
           `<td>${esc(s.name)}</td>`+
-          `<td class='mono small ${s.connected?"":"muted"}'>${s.connected?c:'disconnected'}</td>`+
+          `<td class='mono small ${s.connected?'':'muted'}'>${s.connected?c:'disconnected'}</td>`+
           `<td><form class='row' onsubmit='renameSensor(event,${s.index})'>`+
             `<input name='name' value='${esc(s.name)}' maxlength='31' style='max-width:200px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px'>`+
             `<button class='btn btn-action' type='submit'>Save</button>`+
@@ -99,25 +101,14 @@ function renderSensorNamesTable(){
     :`<tr><td colspan='5' class='muted'>No active sensors. Run a bus scan first.</td></tr>`;
 }
 
-// Renders the static page scaffold once per visit.
+// Renders the static page scaffold ONCE per navigation visit.
+// NEVER call this from pollTick -- use renderSensorNamesTable() for live data.
 function renderSettings(){
   if(state.settingsRendered)return;
   state.settingsRendered=true;
   const c=state.config||{};
   const ledChecked=c.led_enabled?'checked':'';
   document.getElementById('page-settings').innerHTML=
-    // -- Display & LEDs --
-    `<div class='card'><h3>Display &amp; LEDs</h3>`+
-    `<div style='display:flex;align-items:center;justify-content:space-between;padding:.5rem 0'>`+
-      `<div><div style='font-size:.9rem'>Blue LED flash</div><div class='small muted'>Flashes on sensor reads when enabled</div></div>`+
-      `<label style='position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0'>`+
-        `<input type='checkbox' id='led-toggle' ${ledChecked} style='opacity:0;width:0;height:0;position:absolute'>`+
-        `<span id='led-slider' style='position:absolute;inset:0;background:${c.led_enabled?'var(--accent)':'#333'};border-radius:24px;cursor:pointer;transition:.2s'>`+
-          `<span id='led-knob' style='position:absolute;width:18px;height:18px;left:${c.led_enabled?'23':'3'}px;bottom:3px;background:${c.led_enabled?'#fff':'#888'};border-radius:50%;transition:.2s'></span>`+
-        `</span>`+
-      `</label>`+
-    `</div>`+
-    `<div class='actions' style='margin-top:.75rem'><button class='btn btn-action' onclick='saveLed()'>Save</button></div></div>`+
     // -- Sensor Names --
     `<div class='card' style='grid-column:1/-1'>`+
       `<h3>Sensor Names <span id='sn-count' class='pill' style='font-size:.7rem;margin-left:.5rem'></span></h3>`+
@@ -141,7 +132,21 @@ function renderSettings(){
       `<p><b>Results:</b><br><span class='mono small'>${esc((c.topics||{}).results||'-')}</span></p>`+
       `<p><b>Water:</b><br><span class='mono small'>${esc((c.topics||{}).water||'-')}</span></p>`+
       `<p><b>Metrics URL:</b><br><span class='mono small'>http://${esc((state.status||{}).ip||'0.0.0.0')}:${c.prometheusport??9111}/metrics</span></p>`+
-    `</div></div>`;
+    `</div></div>`+
+    // -- Display & LEDs (bottom) --
+    `<div class='card'>`+
+      `<h3>Display &amp; LEDs</h3>`+
+      `<div style='display:flex;align-items:center;justify-content:space-between;padding:.5rem 0'>`+
+        `<div><div style='font-size:.9rem'>Blue LED flash</div><div class='small muted'>Flashes on sensor reads when enabled</div></div>`+
+        `<label style='position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0'>`+
+          `<input type='checkbox' id='led-toggle' ${ledChecked} style='opacity:0;width:0;height:0;position:absolute'>`+
+          `<span id='led-slider' style='position:absolute;inset:0;background:${c.led_enabled?'var(--accent)':'#333'};border-radius:24px;cursor:pointer;transition:.2s'>`+
+            `<span id='led-knob' style='position:absolute;width:18px;height:18px;left:${c.led_enabled?'23':'3'}px;bottom:3px;background:${c.led_enabled?'#fff':'#888'};border-radius:50%;transition:.2s'></span>`+
+          `</span>`+
+        `</label>`+
+      `</div>`+
+      `<div class='actions' style='margin-top:.75rem'><button class='btn btn-action' onclick='saveLed()'>Save</button></div>`+
+    `</div>`;
 
   // Wire up live toggle animation
   const chk=document.getElementById('led-toggle');
@@ -153,7 +158,7 @@ function renderSettings(){
     knob.style.background=chk.checked?'#fff':'#888';
   });
 
-  renderSensorNamesTable(); // populate table with current data
+  renderSensorNamesTable();
 }
 
 function forceRenderSettings(){state.settingsRendered=false;renderSettings();}
@@ -228,6 +233,7 @@ function renderPages(){
   showPage(state.page);
 }
 
+// showPage() is for navigation only -- never call from pollTick.
 function showPage(name){
   state.page=name;
   document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
@@ -248,7 +254,7 @@ function showPage(name){
   if(name==='files'){state.filesLoaded=false;renderFiles();}
 }
 
-// Scan-specific action: refreshes live data + sensor table only, never stomps forms.
+// Scan: update live data + sensor table only, never stomps forms.
 async function postScan(){
   setBusy(true);stopPoll();
   try{
