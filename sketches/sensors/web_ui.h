@@ -7,8 +7,6 @@ void serviceMainWebUi();
 void serviceDeferredWebActions();
 
 void handleHomePage();
-void handleAppJs();
-void handleStyleCss();
 void handleApiStatus();
 void handleApiTemps();
 void handleApiWater();

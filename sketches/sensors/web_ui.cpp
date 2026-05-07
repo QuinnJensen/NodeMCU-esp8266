@@ -54,11 +54,6 @@ void handleHomePage() {
   webServer.send(500, "text/plain", "index.html missing from LittleFS");
 }
 
-void handleSettingsPage() {
-  if (streamLittleFsFile("/settings.html", "text/html; charset=utf-8")) return;
-  webServer.send(500, "text/plain", "settings.html missing from LittleFS");
-}
-
 void handleApiStatus() {
   StaticJsonDocument<1024> doc;
   doc["id"]              = safeDeviceId();
@@ -152,7 +147,6 @@ void handleApiFsList() {
 void handleApiFsFile() {
   if (!webServer.hasArg("path")) { sendError("missing path"); return; }
   String path = webServer.arg("path");
-  // Ensure leading slash
   if (!path.startsWith("/")) path = "/" + path;
   if (!LittleFS.exists(path)) { sendError("file not found", 404); return; }
   File f = LittleFS.open(path, "r");
@@ -228,10 +222,8 @@ void handlePostDisplayConfig() {
 }
 
 void startMainWebUi() {
-  webServer.on("/",              HTTP_GET, handleHomePage);
-  webServer.on("/index.html",    HTTP_GET, handleHomePage);
-  webServer.on("/settings",      HTTP_GET, handleSettingsPage);
-  webServer.on("/settings.html", HTTP_GET, handleSettingsPage);
+  webServer.on("/",           HTTP_GET, handleHomePage);
+  webServer.on("/index.html", HTTP_GET, handleHomePage);
 
   webServer.on("/api/status",          HTTP_GET,  handleApiStatus);
   webServer.on("/api/temps",           HTTP_GET,  handleApiTemps);
