@@ -19,9 +19,14 @@ void loadDefaultWaterThresholds() {
 void buildTopics() {
   String idPart = sanitizeTopicPart(safeDeviceId());
   snprintf(commandTopic, sizeof(commandTopic), "%s/%s/command", config.baseTopic, idPart.c_str());
-  snprintf(statusTopic, sizeof(statusTopic), "%s/%s/status", config.baseTopic, idPart.c_str());
+  snprintf(statusTopic,  sizeof(statusTopic),  "%s/%s/status",  config.baseTopic, idPart.c_str());
   snprintf(resultsTopic, sizeof(resultsTopic), "%s/%s/results", config.baseTopic, idPart.c_str());
-  snprintf(waterTopic, sizeof(waterTopic), "%s/%s/water", config.baseTopic, idPart.c_str());
+  snprintf(waterTopic,   sizeof(waterTopic),   "%s/%s/water",   config.baseTopic, idPart.c_str());
+}
+
+bool setLedEnabled(bool enabled) {
+  config.ledEnabled = enabled;
+  return true;
 }
 
 bool setWaterIntervalMs(uint32_t intervalMs) {
@@ -75,45 +80,39 @@ bool setPrometheusPortValue(uint16_t port) {
 }
 
 bool loadConfig() {
-  strlcpy(config.mqttHost, "192.168.1.50", sizeof(config.mqttHost));
+  // Defaults
+  strlcpy(config.mqttHost,  "192.168.1.50", sizeof(config.mqttHost));
   strlcpy(config.baseTopic, "mountain/mcu", sizeof(config.baseTopic));
-  strlcpy(config.deviceId, "newKid", sizeof(config.deviceId));
+  strlcpy(config.deviceId,  "newKid",       sizeof(config.deviceId));
   config.mqttPort = 1883;
   config.prometheusPort = 9111;
   config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
+  config.ledEnabled = true;
   loadDefaultWaterThresholds();
 
-  if (!LittleFS.exists(configfile)) {
-    buildTopics();
-    return false;
-  }
+  if (!LittleFS.exists(configfile)) { buildTopics(); return false; }
 
   File f = LittleFS.open(configfile, "r");
-  if (!f) {
-    buildTopics();
-    return false;
-  }
+  if (!f) { buildTopics(); return false; }
 
   StaticJsonDocument<512> doc;
   DeserializationError err = deserializeJson(doc, f);
   f.close();
-  if (err) {
-    buildTopics();
-    return false;
-  }
+  if (err) { buildTopics(); return false; }
 
-  strlcpy(config.mqttHost, doc["mqtthost"] | "192.168.1.50", sizeof(config.mqttHost));
+  strlcpy(config.mqttHost,  doc["mqtthost"]  | "192.168.1.50", sizeof(config.mqttHost));
   strlcpy(config.baseTopic, doc["basetopic"] | "mountain/mcu", sizeof(config.baseTopic));
-  strlcpy(config.deviceId, doc["deviceid"] | "newKid", sizeof(config.deviceId));
-  config.mqttPort = doc["mqttport"] | 1883;
-  config.prometheusPort = doc["prometheusport"] | 9111;
+  strlcpy(config.deviceId,  doc["deviceid"]  | "newKid",       sizeof(config.deviceId));
+  config.mqttPort           = doc["mqttport"]           | 1883;
+  config.prometheusPort     = doc["prometheusport"]     | 9111;
   config.waterHeartbeatIntervalMs = doc["waterheartbeatintervalms"] | defaultwaterheartbeatintervalms;
   if (config.waterHeartbeatIntervalMs < 1000UL) config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
+  config.ledEnabled = doc["ledenabled"] | true;
 
-  JsonArrayConst waterThresholds = doc["waterthresholds"].as<JsonArrayConst>();
-  if (!waterThresholds.isNull() && waterThresholds.size() == waterthresholdcount) {
+  JsonArrayConst wt = doc["waterthresholds"].as<JsonArrayConst>();
+  if (!wt.isNull() && wt.size() == waterthresholdcount) {
     uint16_t vals[waterthresholdcount];
-    for (uint8_t i = 0; i < waterthresholdcount; i++) vals[i] = waterThresholds[i] | waterThresholdDefaultsLocal[i];
+    for (uint8_t i = 0; i < waterthresholdcount; i++) vals[i] = wt[i] | waterThresholdDefaultsLocal[i];
     setWaterThresholdsArray(vals, waterthresholdcount);
   }
 
@@ -123,12 +122,13 @@ bool loadConfig() {
 
 bool saveConfig() {
   StaticJsonDocument<512> doc;
-  doc["mqtthost"] = config.mqttHost;
-  doc["mqttport"] = config.mqttPort;
-  doc["basetopic"] = config.baseTopic;
-  doc["deviceid"] = safeDeviceId();
-  doc["prometheusport"] = config.prometheusPort;
+  doc["mqtthost"]               = config.mqttHost;
+  doc["mqttport"]               = config.mqttPort;
+  doc["basetopic"]              = config.baseTopic;
+  doc["deviceid"]               = safeDeviceId();
+  doc["prometheusport"]         = config.prometheusPort;
   doc["waterheartbeatintervalms"] = config.waterHeartbeatIntervalMs;
+  doc["ledenabled"]             = config.ledEnabled;
 
   JsonArray thresholds = doc.createNestedArray("waterthresholds");
   for (uint8_t i = 0; i < waterthresholdcount; i++) thresholds.add(config.waterThresholds[i]);
