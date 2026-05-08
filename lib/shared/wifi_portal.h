@@ -5,7 +5,7 @@
 // Optional display callbacks — register before runStartupPortalIfNeeded()
 // so wifi_portal doesn't depend on sketch-local display_ui.h
 struct WifiPortalDisplay {
-  void (*showPortal)()                          = nullptr;
+  void (*showPortal)(const char* ssid)          = nullptr;
   void (*showCountdown)(uint8_t secondsLeft)    = nullptr;
   void (*setStatus)(const String& msg,
                     unsigned long holdMs)        = nullptr;

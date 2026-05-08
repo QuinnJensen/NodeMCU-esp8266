@@ -53,7 +53,8 @@ static void drawSpinner(int cx, int cy, uint8_t frame) {
     display.fillCircle(cx, cy, 2, SSD1306_WHITE);
 }
 
-void showPortalScreen() {
+void showPortalScreen(const char* ssid) {
+  if (ssid && ssid[0]) sPortalAp = ssid;
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);

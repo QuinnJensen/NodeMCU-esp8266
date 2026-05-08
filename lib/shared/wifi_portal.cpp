@@ -13,8 +13,8 @@ void setWifiPortalDisplayCallbacks(const WifiPortalDisplay& cb) {
   sDisplay = cb;
 }
 
-static void _showPortal() {
-  if (sDisplay.showPortal) sDisplay.showPortal();
+static void _showPortal(const char* ssid = nullptr) {
+  if (sDisplay.showPortal) sDisplay.showPortal(ssid);
 }
 static void _showCountdown(uint8_t s) {
   if (sDisplay.showCountdown) sDisplay.showCountdown(s);
@@ -27,9 +27,14 @@ void saveConfigCallback() {
   shouldSaveConfig = true;
 }
 
+static void configModeCallback(WiFiManager *myWiFiManager) {
+  _showPortal(myWiFiManager->getConfigPortalSSID().c_str());
+}
+
 void startPortalAndConnect(bool forcePortal, const char* ssidSuffix) {
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
+  wm.setAPCallback(configModeCallback);
   wm.setClass("invert");
   wm.setDarkMode(true);
   wm.setConfigPortalTimeout(portaltimeoutsec);
@@ -55,7 +60,6 @@ void startPortalAndConnect(bool forcePortal, const char* ssidSuffix) {
   wm.addParameter(&pDeviceId);
   wm.addParameter(&pPromPort);
   portalActive = true;
-  _showPortal();
   bool ok;
   if (forcePortal) ok = wm.startConfigPortal(ssid);
   else ok = wm.autoConnect(ssid);
@@ -135,7 +139,7 @@ void ensureWiFi() {
 void runStartupPortalIfNeeded(const char* ssidSuffix) {
   bool forcePortal = forcePortalRequested() || startupReconfigRequested();
   if (forcePortal) {
-    _showPortal();
+    _showPortal(nullptr);
     startupDisplayActive = true;
     startupDisplayUntilMs = millis() + 600000UL;
     startPortalAndConnect(true, ssidSuffix);
