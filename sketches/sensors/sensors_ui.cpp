@@ -33,10 +33,7 @@ static void sensorsDisplayBody() {
     }
     uint8_t idx = (displayStartSensor + row) % sensorCount;
     String label = sensorNames[idx][0] ? String(sensorNames[idx]) : String("S") + String(idx + 1);
-    if (label.length() > 7) label = label.substring(0, 7);
-    while (label.length() < 7) label += " ";
-    String addr = sensorAddressString(idx).substring(10);
-    display.print(addr); display.print(" ");
+    if (label.length() > 14) label = label.substring(0, 14);
     display.print(label); display.print(" ");
     if (isnan(sensorTempsC[idx])) display.print("disc");
     else {
