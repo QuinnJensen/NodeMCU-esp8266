@@ -1,6 +1,8 @@
+#ifdef SHARED_LIB_USE_ONEWIRE
 #include "sensor_names.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <ctype.h>
 #include "app_state.h"
 #include "app_config.h"
 #include "sensor_bus.h"
@@ -28,7 +30,6 @@ bool loadSensorNames() {
 
 bool saveSensorNames() {
   if (useFakeSensors) return false;
-
   for (uint8_t i = 0; i < sensorCount; i++) {
     String addr = addressToString(sensorAddresses[i]);
     bool found = false;
@@ -45,7 +46,6 @@ bool saveSensorNames() {
       sensorNameRecordCount++;
     }
   }
-
   StaticJsonDocument<768> doc;
   JsonArray arr = doc.createNestedArray("sensors");
   for (uint8_t j = 0; j < sensorNameRecordCount; j++) {
@@ -84,7 +84,6 @@ bool setSensorNameByAddress(const char* address, const char* newName) {
   if (useFakeSensors) return false;
   if (!address || !address[0]) return false;
   if (!isValidSensorName(newName)) return false;
-
   bool activeFound = false;
   for (uint8_t i = 0; i < sensorCount; i++) {
     String addr = addressToString(sensorAddresses[i]);
@@ -94,7 +93,6 @@ bool setSensorNameByAddress(const char* address, const char* newName) {
       break;
     }
   }
-
   bool recordFound = false;
   for (uint8_t j = 0; j < sensorNameRecordCount; j++) {
     if (String(sensorNameRecords[j].address).equalsIgnoreCase(address)) {
@@ -109,7 +107,6 @@ bool setSensorNameByAddress(const char* address, const char* newName) {
     strlcpy(sensorNameRecords[sensorNameRecordCount].name, newName, sizeof(sensorNameRecords[sensorNameRecordCount].name));
     sensorNameRecordCount++;
   }
-
   return activeFound && saveSensorNames();
 }
 
@@ -141,3 +138,4 @@ String addressSlice(const DeviceAddress addr) {
   String full = addressToString(addr);
   return full.substring(10);
 }
+#endif // SHARED_LIB_USE_ONEWIRE

@@ -1,20 +1,41 @@
 #pragma once
 #include <Arduino.h>
 
+// ── OLED / I2C ───────────────────────────────────────────────────────────────
 #define screenwidth 128
 #define screenheight 64
 #define oledreset -1
 #define oledaddr 0x3C
+#ifndef i2csda
 #define i2csda D5
+#endif
+#ifndef i2cscl
 #define i2cscl D6
-#define forceportalpin D3
-#define oneWirePin D2
-#define probeOnPin D0
-#define blueLedPin D4
+#endif
 
+// ── Common pins ──────────────────────────────────────────────────────────────
+#ifndef forceportalpin
+#define forceportalpin D3
+#endif
+#ifndef blueLedPin
+#define blueLedPin D4
+#endif
+
+// ── 1-Wire (sensors sketch) ──────────────────────────────────────────────────
+#ifndef oneWirePin
+#define oneWirePin D2
+#endif
+
+// ── Water probe (sensors sketch only) ────────────────────────────────────────
+#ifndef probeOnPin
+#define probeOnPin D0
+#endif
+
+// ── LittleFS file paths ──────────────────────────────────────────────────────
 #define configfile "/config.json"
 #define sensornamefile "/sensor_names.json"
 
+// ── Timing constants ─────────────────────────────────────────────────────────
 #define sensorheartbeatintervalms 15000UL
 #define sensorrescanintervalms 60000UL
 #define aggregateheartbeatintervalms 60000UL

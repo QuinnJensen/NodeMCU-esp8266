@@ -1,28 +1,43 @@
 # uhf_modulator
 
 NodeMCU ESP8266 sketch for a 433 MHz OOK/ASK RF transmitter.
-Based on `uhf_modulator.ino`. **Not yet refactored** to use the
-`esp8266-common` shared library — kept verbatim for a future refactor pass.
+Refactored to use the `lib/shared/` modules introduced by the `sensors` sketch.
 
 ## Build
 
 ```sh
 pio run -e uhf_modulator
 pio run -e uhf_modulator -t upload
-pio run -e uhf_modulator -t uploadfs
+pio run -e uhf_modulator -t uploadfs   # uploads data/ to LittleFS
 ```
 
 ## Pin assignments
 
 | Pin | GPIO | Function |
 |-----|------|----------|
-| D3 | 0 | RF DATA output (user-specified; also FLASH button — see note) |
-| D4 | 2 | Onboard blue LED (active LOW, mirrored during TX) |
+| D1 | 5  | RF DATA output (moved from D3 to avoid GPIO0 boot strap) |
+| D2 | 4  | (optional) DS18B20 1-Wire bus |
+| D3 | 0  | Force-portal button (FLASH) |
+| D4 | 2  | Onboard blue LED (mirrored during TX) |
 | D5 | 14 | I2C SDA (SSD1306 OLED) |
 | D6 | 12 | I2C SCL (SSD1306 OLED) |
 
-> **Note:** D3/GPIO0 is a boot-strap pin. Verify your transmitter DATA input
-> is high-impedance so it does not pull GPIO0 LOW at boot.
+> **Note:** The legacy v1 sketch used D3/GPIO0 as the RF DATA output. That pin is
+> a boot-strap pin and conflicts with the FLASH button used by WiFiManager
+> portal entry — the refactor moves DATA to D1/GPIO5, which is safe.
+
+## Features
+
+- Stored timing **profiles** (up to 16) defining pulse/sync/zero/one widths
+  for OOK protocols.
+- Stored **codes** (up to 32), each referencing a profile + bit pattern +
+  repeat count.
+- Deterministic interrupt-disabled busy-wait waveform transmitter, mirrored
+  on the onboard blue LED.
+- Optional DS18B20 1-Wire temperature sensors.
+- Shared WiFiManager captive portal, MQTT client (non-blocking reconnect),
+  Prometheus `/metrics` endpoint, OLED status display, text console with
+  ring buffer, LittleFS-backed config/profiles/codes.
 
 ## MQTT topics
 
@@ -30,36 +45,53 @@ pio run -e uhf_modulator -t uploadfs
 <baseTopic>/<deviceId>/command
 <baseTopic>/<deviceId>/status
 <baseTopic>/<deviceId>/results
-<baseTopic>/<deviceId>/tx
 ```
+
+## MQTT commands
+
+```json
+{"command":"status"}
+{"command":"ls"}
+{"command":"listprofiles"}
+{"command":"listcodes"}
+{"command":"getprofile","id":"proto1_350us"}
+{"command":"getcode","id":"giandel_on"}
+{"command":"upsertprofile","profile":{...}}
+{"command":"upsertcode","code":{...}}
+{"command":"replaceprofiles","profiles":[...]}
+{"command":"replacecodes","codes":[...]}
+{"command":"deleteprofile","id":"..."}
+{"command":"deletecode","id":"..."}
+{"command":"tx","id":"giandel_on"}
+{"command":"txraw","profileId":"proto1_350us","value":14199672,"bits":24,"repeat":10}
+{"command":"scan"}            // 1-Wire rescan (if enabled)
+```
+
+`tx` and `txraw` are queued and run after the MQTT callback returns, so
+the broker connection stays responsive during transmission.
+
+## Web endpoints
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/` | GET | Web UI (LittleFS `index.html`) |
+| `/api/status` | GET | Aggregate JSON status |
+| `/api/config` | GET | Full config snapshot |
+| `/api/profiles` | GET | All timing profiles |
+| `/api/codes` | GET | All stored codes |
+| `/api/tx` | POST | `id=<codeId>` — queue a TX |
+| `/api/sensors/scan` | POST | 1-Wire bus rescan |
+| `/api/console/log` | GET | Console ring buffer |
+| `/api/console/command` | POST | Send a console / MQTT command |
+| `/api/config/services` | POST | Update MQTT/Prom settings |
+| `/api/config/time` | POST | Update timezone |
+| `/api/config/display` | POST | Toggle blue LED |
+| `/api/fs/list`, `/api/fs/file` | GET | LittleFS file browser |
 
 ## Persistent files (LittleFS)
 
-- `config.json` — MQTT, device ID, Prometheus port
-- `profiles.json` — timing profile table (up to 16)
-- `codes.json` — named code table (up to 32)
-
-## Seeded defaults
-
-| Profile | pulse | sync | zero | one | bits | repeat |
-|---------|-------|------|------|-----|------|--------|
-| proto1350us | 350 µs | 1×31 | 1×3 | 3×1 | 24 | 10 |
-| proto1354uscompat | 354 µs | 1×31 | 1×3 | 3×1 | 24 | 25 |
-
-| Code | Profile | Value | Bits | Repeat |
-|------|---------|-------|------|--------|
-| giandelon | proto1350us | 14199672 | 24 | 10 |
-| giandeloff | proto1350us | 14199668 | 24 | 10 |
-| heateron | proto1350us | 757795032 | 31 | 1 |
-| heateroff | proto1350us | 757793412 | 31 | 1 |
-| heaterplus | proto1350us | 757793912 | 31 | 1 |
-| heaterminus | proto1350us | 757793092 | 31 | 1 |
-
-## Shared patterns (future lib candidates)
-
-- WiFiManager captive portal with startup countdown
-- MQTT connect/publish/callback
-- Prometheus metrics endpoint
-- SSD1306 OLED spinner + status line
-- LittleFS config/profiles/codes load/save
-- `sanitizeTopicPart`, `ipToString`, `timeToString`
+- `config.json` — MQTT host/port, base topic, device id, prom port, timezone
+- `profiles.json` — timing profile table
+- `codes.json` — stored code table
+- `sensor_names.json` — DS18B20 friendly-name mapping
+- `index.html` — web UI

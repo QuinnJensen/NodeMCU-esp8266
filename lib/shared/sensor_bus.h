@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#ifdef SHARED_LIB_USE_ONEWIRE
 #include <DallasTemperature.h>
 
 void initSensorBus();
@@ -9,7 +10,8 @@ void collectTemperatureResults();          // async: reads results (call 800ms a
 void readTemperatures();                   // blocking shim for setup(), feeds WDT safely
 void sampleSensors();                      // scan + async-safe read
 String sensorAddressString(uint8_t i);
-String defaultSensorNameForAddress(const DeviceAddress addr);  // generates sens### fallback name
+String defaultSensorNameForAddress(const DeviceAddress addr);
 
 extern bool conversionPending;
 extern unsigned long conversionRequestedMs;
+#endif

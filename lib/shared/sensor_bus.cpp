@@ -1,4 +1,5 @@
-// sensor_bus.cpp
+// sensor_bus.cpp - shared 1-Wire DS18B20 driver
+#ifdef SHARED_LIB_USE_ONEWIRE
 #include "sensor_bus.h"
 #include <math.h>
 #include "app_state.h"
@@ -13,7 +14,7 @@ bool conversionPending = false;
 unsigned long conversionRequestedMs = 0;
 
 void initSensorBus() {
-  ds.setWaitForConversion(false); // always async
+  ds.setWaitForConversion(false);
   ds.begin();
 }
 
@@ -24,7 +25,7 @@ String defaultSensorNameForAddress(const DeviceAddress addr) {
   return String(buf);
 }
 
-void clearFakeSensorEffects() {
+static void clearFakeSensorEffects() {
   useFakeSensors = false;
   for (uint8_t i = 0; i < maxsensors; i++) {
     sensorPresent[i] = false;
@@ -36,7 +37,7 @@ void clearFakeSensorEffects() {
   displayStartSensor = 0;
 }
 
-void loadFakeSensors() {
+static void loadFakeSensors() {
   useFakeSensors = true;
   sensorCount = 3;
   for (uint8_t i = 0; i < maxsensors; i++) {
@@ -56,7 +57,7 @@ void scanSensors(bool force) {
   if (!force && lastSensorRescanMs > 0 && millis() - lastSensorRescanMs < sensorrescanintervalms) return;
   lastSensorRescanMs = millis();
 
-  flashBlueLed(30); // brief pulse at scan start, mirrors spinner dot
+  flashBlueLed(30);
 
   DeviceAddress discovered[maxsensors];
   bool duplicateFound = false;
@@ -105,17 +106,15 @@ void scanSensors(bool force) {
   }
 }
 
-// Phase 1: fire conversion and return immediately (non-blocking)
 void requestTemperatureConversion() {
   if (useFakeSensors || sensorCount == 0) return;
-  pulseSpinnerDot(900);  // dot visible for full conversion window
-  flashBlueLed(30);      // brief LED flash mirrors the spinner dot
+  pulseSpinnerDot(900);
+  flashBlueLed(30);
   ds.requestTemperatures();
   conversionPending = true;
   conversionRequestedMs = millis();
 }
 
-// Phase 2: collect results -- call 800ms after requestTemperatureConversion()
 void collectTemperatureResults() {
   if (useFakeSensors || !conversionPending) return;
   conversionPending = false;
@@ -133,11 +132,10 @@ void collectTemperatureResults() {
   lastSensorSampleMs = millis();
 }
 
-// Blocking shim for setup()/onMqttConnected() initial read -- feeds WDT safely
 void readTemperatures() {
   if (useFakeSensors) return;
   pulseSpinnerDot(900);
-  flashBlueLed(30);      // brief LED flash mirrors the spinner dot
+  flashBlueLed(30);
   ds.requestTemperatures();
   unsigned long start = millis();
   while (millis() - start < 800) { yield(); }
@@ -163,3 +161,4 @@ String sensorAddressString(uint8_t i) {
   if (useFakeSensors && i < 3) return String(fakeSensorAddresses[i]);
   return addressToString(sensorAddresses[i]);
 }
+#endif // SHARED_LIB_USE_ONEWIRE
