@@ -1,33 +1,33 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
-#include <Wire.h>
 
 #include "pins_and_constants.h"
 #include "app_config.h"
 #include "app_state.h"
 #include "util.h"
-#include "sensor_names.h"
-#include "sensor_bus.h"
-#include "water_probe.h"
 #include "wifi_portal.h"
 #include "web_ui.h"
 #include "metrics_server.h"
 #include "mqtt_client.h"
-#include "mqtt_publish.h"
 #include "display_ui.h"
-#include "scheduler.h"
-#include "mqtt_commands.h"
 #include "console_log.h"
 
-void registerSensorsUiHooks();
+#include "heater_state.h"
+#include "heater_mqtt.h"
+#ifdef SHARED_LIB_USE_ONEWIRE
+#include "sensor_bus.h"
+#include "sensor_names.h"
+#endif
+
+void registerHeaterUiHooks();
+
+#define WH_HEARTBEAT_INTERVAL_MS 30000UL
+
+static unsigned long lastHeartbeatMs = 0;
 
 static void onMqttConnected() {
-  scanSensors(true);
-  readTemperatures();
-  beginWaterSample();
-  publishAggregateStatus();
-  publishPerSensorStatuses();
+  publishHeaterStatus(true);
   mqttOnlinePublished = true;
 }
 
@@ -52,8 +52,10 @@ void setup() {
   delay(50);
   bootMillis = millis();
 
+  startModulator();              // Timer1 SSR Bresenham starts immediately
+
   initDisplayUi();
-  registerSensorsUiHooks();
+  registerHeaterUiHooks();
   setStatusMessage("booting", 1500);
 
   {
@@ -79,9 +81,12 @@ void setup() {
   loadConfig();
   setupTimeHelpers();
 
-  initWaterProbePins();
+#ifdef SHARED_LIB_USE_ONEWIRE
   initSensorBus();
   loadSensorNames();
+#endif
+
+  loadCalibration();
   initMqttClient();
 
   runStartupPortalIfNeeded();
@@ -89,7 +94,17 @@ void setup() {
   startMainWebUi();
   startMetricsServer();
   startMqttIfWifiReady();
+
+  lastCommandMs = millis();
+  powerLevelChangedMs = millis();
+  updatePowerValues(0);
+  setStatusMessage("heater ready", 2000);
 }
+
+static unsigned long lastRssiMs = 0;
+#ifdef SHARED_LIB_USE_ONEWIRE
+static bool waitingTempCollect = false;
+#endif
 
 void loop() {
   serviceWifiPortal();
@@ -97,6 +112,38 @@ void loop() {
   serviceMetricsServer();
   serviceMqttClient();
   serviceDeferredWebActions();
-  runScheduledTasks();
   updateDisplayUi();
+
+  unsigned long now = millis();
+
+  if (now - lastRssiMs >= 1000) {
+    lastRssi = WiFi.RSSI();
+    lastRssiMs = now;
+  }
+
+  if (mqtt.connected() && now - lastHeartbeatMs >= WH_HEARTBEAT_INTERVAL_MS) {
+    lastHeartbeatMs = now;
+    publishHeaterStatus(false);
+  }
+
+#ifdef SHARED_LIB_USE_ONEWIRE
+  // Async 1-Wire sample loop -- if any sensors detected/configured, read every heartbeat
+  if (waitingTempCollect && conversionPending && now - conversionRequestedMs >= 800) {
+    collectTemperatureResults();
+    waitingTempCollect = false;
+  }
+  if (now - lastSensorHeartbeatMs >= sensorheartbeatintervalms) {
+    scanSensors();
+    requestTemperatureConversion();
+    waitingTempCollect = true;
+    lastSensorHeartbeatMs = now;
+  }
+#endif
+
+  // Refresh display power readout occasionally (calibration may shift)
+  static unsigned long lastRefresh = 0;
+  if (now - lastRefresh >= 1000) {
+    lastRefresh = now;
+    refreshDisplayedPower();
+  }
 }

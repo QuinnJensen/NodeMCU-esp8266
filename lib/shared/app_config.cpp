@@ -9,12 +9,20 @@ AppConfig config;
 char commandTopic[128];
 char statusTopic[128];
 char resultsTopic[128];
+#ifdef SHARED_LIB_USE_WATER_PROBE
 char waterTopic[128];
-
 static const uint16_t waterThresholdDefaultsLocal[waterthresholdcount] = {20, 44, 268, 485, 1023};
 
 void loadDefaultWaterThresholds() {
   for (uint8_t i = 0; i < waterthresholdcount; i++) config.waterThresholds[i] = waterThresholdDefaultsLocal[i];
+}
+#endif
+
+static AppConfigExtraLoadFn sExtraLoad = nullptr;
+static AppConfigExtraSaveFn sExtraSave = nullptr;
+void setAppConfigExtraHooks(AppConfigExtraLoadFn loadFn, AppConfigExtraSaveFn saveFn) {
+  sExtraLoad = loadFn;
+  sExtraSave = saveFn;
 }
 
 void buildTopics() {
@@ -22,7 +30,9 @@ void buildTopics() {
   snprintf(commandTopic, sizeof(commandTopic), "%s/%s/command", config.baseTopic, idPart.c_str());
   snprintf(statusTopic,  sizeof(statusTopic),  "%s/%s/status",  config.baseTopic, idPart.c_str());
   snprintf(resultsTopic, sizeof(resultsTopic), "%s/%s/results", config.baseTopic, idPart.c_str());
+#ifdef SHARED_LIB_USE_WATER_PROBE
   snprintf(waterTopic,   sizeof(waterTopic),   "%s/%s/water",   config.baseTopic, idPart.c_str());
+#endif
 }
 
 bool setLedEnabled(bool enabled) {
@@ -30,6 +40,7 @@ bool setLedEnabled(bool enabled) {
   return true;
 }
 
+#ifdef SHARED_LIB_USE_WATER_PROBE
 bool setWaterIntervalMs(uint32_t intervalMs) {
   if (intervalMs < 1000UL || intervalMs > 86400000UL) return false;
   config.waterHeartbeatIntervalMs = intervalMs;
@@ -47,6 +58,7 @@ bool setWaterThresholdsArray(const uint16_t* vals, uint8_t count) {
   for (uint8_t i = 0; i < count; i++) config.waterThresholds[i] = vals[i];
   return true;
 }
+#endif
 
 bool setMqttHostValue(const char* host) {
   if (!host || !host[0]) return false;
@@ -91,59 +103,69 @@ bool setTimezoneValue(const char* tz) {
 bool loadConfig() {
   // Defaults
   strlcpy(config.mqttHost,  "192.168.1.50", sizeof(config.mqttHost));
-  strlcpy(config.baseTopic, "stat/w1",      sizeof(config.baseTopic));
-  strlcpy(config.deviceId,  "newKid",       sizeof(config.deviceId));
+  strlcpy(config.baseTopic, SHARED_LIB_DEFAULT_BASE_TOPIC, sizeof(config.baseTopic));
+  strlcpy(config.deviceId,  SHARED_LIB_DEFAULT_DEVICE_ID,  sizeof(config.deviceId));
   strlcpy(config.timezone,  devicetz,       sizeof(config.timezone));
   config.mqttPort = 1883;
   config.prometheusPort = 9111;
-  config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
   config.ledEnabled = true;
+#ifdef SHARED_LIB_USE_WATER_PROBE
+  config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
   loadDefaultWaterThresholds();
+#endif
 
   if (!LittleFS.exists(configfile)) { buildTopics(); return false; }
 
   File f = LittleFS.open(configfile, "r");
   if (!f) { buildTopics(); return false; }
 
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<1024> doc;
   DeserializationError err = deserializeJson(doc, f);
   f.close();
   if (err) { buildTopics(); return false; }
 
   strlcpy(config.mqttHost,  doc["mqtthost"]  | "192.168.1.50", sizeof(config.mqttHost));
-  strlcpy(config.baseTopic, doc["basetopic"] | "stat/w1",      sizeof(config.baseTopic));
-  strlcpy(config.deviceId,  doc["deviceid"]  | "newKid",       sizeof(config.deviceId));
+  strlcpy(config.baseTopic, doc["basetopic"] | SHARED_LIB_DEFAULT_BASE_TOPIC, sizeof(config.baseTopic));
+  strlcpy(config.deviceId,  doc["deviceid"]  | SHARED_LIB_DEFAULT_DEVICE_ID, sizeof(config.deviceId));
   strlcpy(config.timezone,  doc["timezone"]  | devicetz,       sizeof(config.timezone));
   config.mqttPort           = doc["mqttport"]           | 1883;
   config.prometheusPort     = doc["prometheusport"]     | 9111;
-  config.waterHeartbeatIntervalMs = doc["waterheartbeatintervalms"] | defaultwaterheartbeatintervalms;
-  if (config.waterHeartbeatIntervalMs < 1000UL) config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
   config.ledEnabled = doc["ledenabled"] | true;
 
+#ifdef SHARED_LIB_USE_WATER_PROBE
+  config.waterHeartbeatIntervalMs = doc["waterheartbeatintervalms"] | defaultwaterheartbeatintervalms;
+  if (config.waterHeartbeatIntervalMs < 1000UL) config.waterHeartbeatIntervalMs = defaultwaterheartbeatintervalms;
   JsonArrayConst wt = doc["waterthresholds"].as<JsonArrayConst>();
   if (!wt.isNull() && wt.size() == waterthresholdcount) {
     uint16_t vals[waterthresholdcount];
     for (uint8_t i = 0; i < waterthresholdcount; i++) vals[i] = wt[i] | waterThresholdDefaultsLocal[i];
     setWaterThresholdsArray(vals, waterthresholdcount);
   }
+#endif
+
+  if (sExtraLoad) sExtraLoad(doc.as<JsonObjectConst>());
 
   buildTopics();
   return true;
 }
 
 bool saveConfig() {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<1024> doc;
   doc["mqtthost"]               = config.mqttHost;
   doc["mqttport"]               = config.mqttPort;
   doc["basetopic"]              = config.baseTopic;
   doc["deviceid"]               = safeDeviceId();
   doc["timezone"]               = config.timezone;
   doc["prometheusport"]         = config.prometheusPort;
-  doc["waterheartbeatintervalms"] = config.waterHeartbeatIntervalMs;
   doc["ledenabled"]             = config.ledEnabled;
 
+#ifdef SHARED_LIB_USE_WATER_PROBE
+  doc["waterheartbeatintervalms"] = config.waterHeartbeatIntervalMs;
   JsonArray thresholds = doc.createNestedArray("waterthresholds");
   for (uint8_t i = 0; i < waterthresholdcount; i++) thresholds.add(config.waterThresholds[i]);
+#endif
+
+  if (sExtraSave) sExtraSave(doc.as<JsonObject>());
 
   File f = LittleFS.open(configfile, "w");
   if (!f) return false;

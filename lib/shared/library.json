@@ -1,7 +1,7 @@
 {
   "name": "esp8266-common",
   "version": "0.1.0",
-  "description": "Reusable ESP8266 modules: WiFi captive portal, MQTT client, app config (LittleFS), util helpers, pins/constants. Sketch-specific modules (app_state, display_ui, scheduler, mqtt_commands) live in each sketch.",
+  "description": "Reusable ESP8266 modules: WiFi captive portal, non-blocking MQTT client, app config (LittleFS), Prometheus metrics endpoint, SSD1306 display, web UI plumbing, console ring buffer, optional 1-Wire DS18B20 driver, util helpers.",
   "keywords": ["esp8266", "nodemcu", "mqtt", "wifi", "littlefs"],
   "license": "MIT",
   "frameworks": "arduino",

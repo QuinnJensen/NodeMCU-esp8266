@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Water Heater</title>
+  <style>
+:root{--bg:#111315;--panel:#181b1f;--panel2:#1f2429;--text:#e8edf2;--muted:#98a3af;--line:#2c333b;--accent:#d96c6c;--accent2:#efc374;--good:#6fbe7a;--bad:#d96c6c;--radius:14px;}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif}
+.app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+.sidebar{background:#15181c;border-right:1px solid var(--line);padding:18px;position:sticky;top:0;height:100vh}
+.brand h1{margin:0;font-size:18px}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.nav{display:grid;gap:6px;margin-top:18px}
+.nav button{width:100%;text-align:left;background:transparent;color:var(--text);border:1px solid transparent;padding:10px 12px;border-radius:10px;cursor:pointer}
+.nav button:hover,.nav button.active{background:var(--panel);border-color:var(--line)}
+.main{padding:18px 22px 32px}
+.topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.title h2{margin:0;font-size:24px}
+.title p{margin:4px 0 0;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:8px}
+.badge{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:12px;color:var(--muted)}
+.badge b{color:var(--text)}
+.grid{display:grid;gap:14px}
+.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.card h3{margin:0 0 10px}
+.kpi{font-size:30px;font-weight:800}
+.muted{color:var(--muted)}
+.btn{appearance:none;border:none;border-radius:10px;padding:9px 14px;cursor:pointer;background:var(--accent);color:#1a0d0d;font-weight:700}
+.btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:wait}
+.field{display:grid;gap:5px;margin:6px 0}
+.field input,.field select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+.bar-wrap{height:18px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:6px 0}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--good),var(--accent2),var(--accent));transition:width .3s}
+.console-pane{background:#0b0d10;border:1px solid var(--line);border-radius:10px;padding:8px;height:48vh;min-height:280px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.45;color:#cfd6dd}
+.clog-line{white-space:pre-wrap;word-break:break-word;padding:1px 0}
+.clog-line .ts{color:#5e6a76;margin-right:6px}
+.clog-line .tag{display:inline-block;min-width:36px;margin-right:6px;font-weight:700;font-size:11px;text-transform:uppercase}
+.clog-line.rx .tag{color:#87d6c1}.clog-line.tx .tag{color:#7fb6e6}.clog-line.warn{color:#efc374}.clog-line.warn .tag{color:#efc374}.clog-line.err{color:#f0a2a2}
+.console-input{display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 8px;margin-top:8px}
+.console-input input{flex:1;background:transparent;color:var(--text);border:none;outline:none;font-family:ui-monospace,Menlo,monospace}
+.hidden{display:none!important}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.small{font-size:12px}
+@media (max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto}.grid.two,.grid.three{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><h1>Water Heater</h1><p>SSR controller</p></div>
+    <div class="nav">
+      <button data-page="dashboard" class="active">Dashboard</button>
+      <button data-page="control">Control</button>
+      <button data-page="cal">Calibration</button>
+      <button data-page="temps">Temperatures</button>
+      <button data-page="console">Console</button>
+      <button data-page="settings">Settings</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="title"><h2 id="page-title">Dashboard</h2><p id="page-subtitle">Live heater state</p></div>
+      <div class="badges">
+        <div class="badge"><b id="badge-id">-</b></div>
+        <div class="badge">WiFi <b id="badge-wifi">-</b></div>
+        <div class="badge">MQTT <b id="badge-mqtt">-</b></div>
+        <div class="badge" id="badge-version">-</div>
+      </div>
+    </div>
+    <section id="page-dashboard" class="page grid"></section>
+    <section id="page-control"   class="page grid hidden"></section>
+    <section id="page-cal"       class="page grid hidden"></section>
+    <section id="page-temps"     class="page grid hidden"></section>
+    <section id="page-console"   class="page grid hidden"></section>
+    <section id="page-settings"  class="page grid hidden"></section>
+  </main>
+</div>
+<script>
+const state={status:null,config:null,console:{lastSeq:0,timer:null,history:[],histIdx:-1,autoscroll:true},pollTimer:null,page:'dashboard',busy:false};
+const esc=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+async function fJ(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(u);return r.json();}
+const postForm=(u,o)=>{const fd=new URLSearchParams();Object.entries(o).forEach(([k,v])=>fd.append(k,v));return fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd.toString()});};
+function renderChrome(){const s=state.status||{};document.getElementById('badge-id').textContent=s.id||'-';document.getElementById('badge-wifi').textContent=s.wifi_connected?'up':'down';document.getElementById('badge-mqtt').textContent=s.mqtt_connected?'up':'down';if(s.build_version)document.getElementById('badge-version').textContent=s.build_version;}
+function renderDashboard(){const s=state.status||{};const pct=s.power_percent??0;const w=s.est_power_watts??0;const a=s.est_current_amps??0;const sim=s.sim_output?'ON':'OFF';
+  document.getElementById('page-dashboard').innerHTML=
+    `<div class='grid three'>`+
+      `<div class='card'><div class='muted'>Power</div><div class='kpi'>${pct}%</div><div class='small muted'>${Number(w).toFixed(0)} W &nbsp; ${Number(a).toFixed(2)} A</div><div class='bar-wrap'><div class='bar-fill' style='width:${pct}%'></div></div></div>`+
+      `<div class='card'><div class='muted'>Modulator</div><div class='kpi'>${sim}</div><div class='small muted'>ticks ${s.sim_ticks??0} / on ${s.sim_on_ticks??0}</div></div>`+
+      `<div class='card'><div class='muted'>Uptime</div><div class='kpi'>${Math.floor((s.uptime_ms||0)/1000)}s</div><div class='small muted'>RSSI ${s.rssidbm??'-'} dBm &middot; Heap ${s.freeheap??0}</div></div>`+
+    `</div>`+
+    `<div class='grid two'>`+
+      `<div class='card'><h3>Status</h3><p><b>SSID:</b> ${esc(s.ssid||'-')}</p><p><b>IP:</b> <span class='mono'>${esc(s.ip||'-')}</span></p><p><b>Calibrated:</b> ${s.calibration_enabled?'yes':'no'}</p><p><b>Last cmd:</b> ${s.seconds_since_last_command??0}s ago</p><p><b>At level:</b> ${s.seconds_at_current_power_level??0}s</p></div>`+
+      `<div class='card'><h3>Quick Set</h3>`+
+        [0,10,25,50,75,100].map(p=>`<button class='btn secondary' onclick='setPower(${p})' style='margin:4px'>${p}%</button>`).join('')+
+        `<form onsubmit='return setPowerForm(event)' style='margin-top:10px'><div class='field'><label>Power %</label><input type='number' min='0' max='100' name='percent' value='${pct}'></div><button class='btn' type='submit'>Apply</button></form>`+
+      `</div>`+
+    `</div>`;
+}
+async function setPower(p){await postForm('/api/heater/power',{percent:p});await refreshAll();}
+function setPowerForm(ev){ev.preventDefault();const v=ev.target.percent.value;setPower(v);return false;}
+function renderControl(){
+  const s=state.status||{};
+  document.getElementById('page-control').innerHTML=
+    `<div class='card'><h3>Heater Control</h3>`+
+      `<div class='bar-wrap' style='height:24px'><div class='bar-fill' style='width:${s.power_percent??0}%'></div></div>`+
+      `<form onsubmit='return setPowerForm(event)'><div class='field'><label>Power percent (0-100)</label><input type='number' min='0' max='100' name='percent' value='${s.power_percent??0}'></div><button class='btn' type='submit'>Set Power</button></form>`+
+      `<p class='muted small'>Bresenham SSR modulator runs in Timer1 ISR at 120 Hz.</p>`+
+    `</div>`;
+}
+function renderCal(){
+  const s=state.status||{};const cal=s.calibration_points||Array(10).fill(-1);
+  let rows='';for(let i=0;i<10;i++){const p=(i+1)*10;const v=cal[i];rows+=`<tr><td>${p}%</td><td class='mono'>${v<0?'-':v.toFixed(1)+' W'}</td></tr>`;}
+  document.getElementById('page-cal').innerHTML=
+    `<div class='card'><h3>Calibration</h3><p class='muted small'>Set the heater power, then submit the actual measured watts. Stores under the nearest 10% bucket.</p>`+
+      `<form onsubmit='return doCal(event)'><div class='field'><label>Actual power (watts) at current ${s.power_percent??0}% setting</label><input type='number' step='0.1' name='actual_power_watts'></div><button class='btn' type='submit'>Calibrate</button> <button class='btn secondary' type='button' onclick='purgeCal()'>Purge All</button></form>`+
+      `<table style='width:100%;margin-top:14px;border-collapse:collapse'><tbody>${rows}</tbody></table>`+
+    `</div>`;
+}
+async function doCal(ev){ev.preventDefault();const v=ev.target.actual_power_watts.value;await postForm('/api/heater/calibrate',{actual_power_watts:v});await refreshAll();return false;}
+async function purgeCal(){if(!confirm('Purge calibration table?'))return;await postForm('/api/heater/calibrate/purge',{});await refreshAll();}
+function renderTemps(){
+  const s=state.status||{};const sensors=s.sensors||[];
+  const rows=sensors.length?sensors.map(x=>`<tr><td>${x.index}</td><td>${esc(x.name||'-')}</td><td class='mono'>${esc(x.address||'-')}</td><td>${x.connected?'connected':'disc'}</td><td>${x.tempc==null?'-':Number(x.tempc).toFixed(2)+' °C / '+(x.tempc*9/5+32).toFixed(1)+' °F'}</td></tr>`).join(''):`<tr><td colspan='5' class='muted'>No sensors configured. Hook up DS18B20 on D2 for optional 1-Wire support, then trigger a scan.</td></tr>`;
+  document.getElementById('page-temps').innerHTML=
+    `<div class='card'><h3>1-Wire Temperature Sensors (optional)</h3>`+
+      `<button class='btn secondary' onclick='postScan()'>Rescan Bus</button>`+
+      `<table style='width:100%;margin-top:10px;border-collapse:collapse'><thead><tr><th>#</th><th>Name</th><th>Addr</th><th>State</th><th>Reading</th></tr></thead><tbody>${rows}</tbody></table>`+
+    `</div>`;
+}
+async function postScan(){await postForm('/api/sensors/scan',{});setTimeout(refreshAll,1500);}
+function renderSettings(){
+  const c=state.config||{};
+  document.getElementById('page-settings').innerHTML=
+    `<div class='card'><h3>MQTT &amp; Prometheus</h3><form onsubmit='return saveServices(event)'>`+
+      `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
+      `<div class='field'><label>MQTT port</label><input name='mqttport' type='number' value='${c.mqttport??1883}'></div>`+
+      `<div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div>`+
+      `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
+      `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' value='${c.prometheusport??9111}'></div>`+
+      `<button class='btn' type='submit'>Save</button>`+
+    `</form><p class='small muted'>Topics: <span class='mono'>${esc((c.topics||{}).command||'-')}</span> / <span class='mono'>${esc((c.topics||{}).status||'-')}</span></p></div>`+
+    `<div class='card'><h3>Timezone</h3><form onsubmit='return saveTz(event)'><div class='field'><label>POSIX TZ</label><input name='timezone' value='${esc(c.timezone||'')}'></div><button class='btn' type='submit'>Save</button></form></div>`;
+}
+async function saveServices(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/services',Object.fromEntries(fd));await refreshAll();return false;}
+async function saveTz(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/time',Object.fromEntries(fd));await refreshAll();return false;}
+
+// Console
+function renderConsole(){
+  document.getElementById('page-console').innerHTML=
+    `<div class='card' style='grid-column:1/-1'><h3>Console</h3>`+
+    `<div class='console-pane' id='console-pane'></div>`+
+    `<form class='console-input' onsubmit='return sendConsole(event)'><span style='color:var(--accent)'>&gt;</span><input id='console-cmd' placeholder='/help or {"command":"status"}'><button class='btn' type='submit'>Send</button></form>`+
+    `</div>`;
+  startConsolePoll();
+}
+async function pollConsoleOnce(){try{const d=await fJ('/api/console/log?after='+state.console.lastSeq);if(d.entries)appendConsole(d.entries);if(typeof d.seq==='number')state.console.lastSeq=d.seq;}catch(e){}}
+function appendConsole(entries){const pane=document.getElementById('console-pane');if(!pane)return;const f=document.createDocumentFragment();for(const e of entries){const div=document.createElement('div');div.className='clog-line '+(e.type||'info');const ts=e.local||('+'+Math.floor((e.uptime_ms||0)/1000)+'s');div.innerHTML=`<span class='ts'>${ts}</span><span class='tag'>${esc(e.type||'info')}</span><span>${esc(e.msg||'')}</span>`;f.appendChild(div);}pane.appendChild(f);while(pane.children.length>300)pane.removeChild(pane.firstChild);if(state.console.autoscroll)pane.scrollTop=pane.scrollHeight;}
+function startConsolePoll(){stopConsolePoll();pollConsoleOnce();state.console.timer=setInterval(pollConsoleOnce,2000);}
+function stopConsolePoll(){if(state.console.timer){clearInterval(state.console.timer);state.console.timer=null;}}
+async function sendConsole(ev){ev.preventDefault();const inp=document.getElementById('console-cmd');const cmd=inp.value.trim();if(!cmd)return false;if(cmd.toLowerCase()==='/clear'){document.getElementById('console-pane').innerHTML='';inp.value='';return false;}inp.value='';await postForm('/api/console/command',{cmd});setTimeout(pollConsoleOnce,300);return false;}
+
+async function refreshAll(){try{state.config=await fJ('/api/config');state.status=await fJ('/api/status');renderChrome();renderPages();}catch(e){console.warn(e);}}
+function renderPages(){renderDashboard();renderControl();renderCal();renderTemps();renderSettings();showPage(state.page);}
+function showPage(name){state.page=name;document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));const p=document.getElementById('page-'+name);if(p)p.classList.remove('hidden');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===name));const titles={dashboard:['Dashboard','Live heater state'],control:['Control','Set the heater power'],cal:['Calibration','Power-table calibration'],temps:['Temperatures','Optional 1-Wire DS18B20 sensors'],console:['Console','Recent device events and command entry'],settings:['Settings','MQTT broker, topics, identity, timezone']};document.getElementById('page-title').textContent=(titles[name]||['',''])[0];document.getElementById('page-subtitle').textContent=(titles[name]||['',''])[1];if(name==='console')renderConsole();else stopConsolePoll();}
+document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
+function pollTick(){refreshAll().finally(()=>state.pollTimer=setTimeout(pollTick,8000));}
+refreshAll().finally(()=>state.pollTimer=setTimeout(pollTick,8000));
+</script>
+</body></html>

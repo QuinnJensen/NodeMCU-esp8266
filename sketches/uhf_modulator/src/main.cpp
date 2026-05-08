@@ -1,33 +1,33 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
-#include <Wire.h>
 
 #include "pins_and_constants.h"
 #include "app_config.h"
 #include "app_state.h"
 #include "util.h"
-#include "sensor_names.h"
-#include "sensor_bus.h"
-#include "water_probe.h"
 #include "wifi_portal.h"
 #include "web_ui.h"
 #include "metrics_server.h"
 #include "mqtt_client.h"
-#include "mqtt_publish.h"
 #include "display_ui.h"
-#include "scheduler.h"
-#include "mqtt_commands.h"
 #include "console_log.h"
 
-void registerSensorsUiHooks();
+#include "uhf_codec.h"
+#include "uhf_mqtt.h"
+#ifdef SHARED_LIB_USE_ONEWIRE
+#include "sensor_bus.h"
+#include "sensor_names.h"
+#endif
+
+void registerUhfUiHooks();
+
+#define UHF_HEARTBEAT_INTERVAL_MS 60000UL
+
+static unsigned long lastHeartbeatMs = 0;
 
 static void onMqttConnected() {
-  scanSensors(true);
-  readTemperatures();
-  beginWaterSample();
-  publishAggregateStatus();
-  publishPerSensorStatuses();
+  publishUhfStatus(true);
   mqttOnlinePublished = true;
 }
 
@@ -52,8 +52,9 @@ void setup() {
   delay(50);
   bootMillis = millis();
 
+  initUhfIo();
   initDisplayUi();
-  registerSensorsUiHooks();
+  registerUhfUiHooks();
   setStatusMessage("booting", 1500);
 
   {
@@ -79,17 +80,28 @@ void setup() {
   loadConfig();
   setupTimeHelpers();
 
-  initWaterProbePins();
+#ifdef SHARED_LIB_USE_ONEWIRE
   initSensorBus();
   loadSensorNames();
-  initMqttClient();
+#endif
 
+  loadProfiles();
+  loadCodes();
+
+  initMqttClient();
   runStartupPortalIfNeeded();
 
   startMainWebUi();
   startMetricsServer();
   startMqttIfWifiReady();
+
+  setStatusMessage("uhf ready", 2000);
 }
+
+static unsigned long lastRssiMs = 0;
+#ifdef SHARED_LIB_USE_ONEWIRE
+static bool waitingTempCollect = false;
+#endif
 
 void loop() {
   serviceWifiPortal();
@@ -97,6 +109,30 @@ void loop() {
   serviceMetricsServer();
   serviceMqttClient();
   serviceDeferredWebActions();
-  runScheduledTasks();
   updateDisplayUi();
+
+  unsigned long now = millis();
+
+  if (now - lastRssiMs >= 1000) {
+    lastRssi = WiFi.RSSI();
+    lastRssiMs = now;
+  }
+
+  if (mqtt.connected() && now - lastHeartbeatMs >= UHF_HEARTBEAT_INTERVAL_MS) {
+    lastHeartbeatMs = now;
+    publishUhfStatus(false);
+  }
+
+#ifdef SHARED_LIB_USE_ONEWIRE
+  if (waitingTempCollect && conversionPending && now - conversionRequestedMs >= 800) {
+    collectTemperatureResults();
+    waitingTempCollect = false;
+  }
+  if (now - lastSensorHeartbeatMs >= sensorheartbeatintervalms) {
+    scanSensors();
+    requestTemperatureConversion();
+    waitingTempCollect = true;
+    lastSensorHeartbeatMs = now;
+  }
+#endif
 }
