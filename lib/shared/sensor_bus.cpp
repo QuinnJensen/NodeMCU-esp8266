@@ -19,9 +19,10 @@ void initSensorBus() {
 }
 
 String defaultSensorNameForAddress(const DeviceAddress addr) {
-  uint16_t low12 = ((uint16_t)(addr[6] & 0x0F) << 8) | addr[7];
+  // Use last 5 hex digits of address (low nibble of addr[5], full addr[6], full addr[7])
+  uint32_t low20 = ((uint32_t)(addr[5] & 0x0F) << 16) | ((uint32_t)addr[6] << 8) | addr[7];
   char buf[16];
-  snprintf(buf, sizeof(buf), "sens%03X", low12);
+  snprintf(buf, sizeof(buf), "sens%05X", low20);
   return String(buf);
 }
 
