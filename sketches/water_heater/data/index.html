@@ -212,8 +212,8 @@ function renderSettings(){
     `<div class='card'><h3>Timezone</h3><form onsubmit='return saveTz(event)'><div class='field'><label>POSIX TZ</label><input name='timezone' value='${esc(c.timezone||'')}'></div><button class='btn' type='submit'>Save</button></form></div>`;
 }
 function forceRenderSettings(){state.settingsRendered=false;renderSettings();}
-async function saveServices(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/services',Object.fromEntries(fd));await refreshAll();state.configSnapshot=configFingerprint(state.config);return false;}
-async function saveTz(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/time',Object.fromEntries(fd));await refreshAll();state.configSnapshot=configFingerprint(state.config);return false;}
+async function saveServices(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/services',Object.fromEntries(fd));state.config=await fetchJson('/api/config');state.configSnapshot=configFingerprint(state.config);await refreshAll();return false;}
+async function saveTz(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/time',Object.fromEntries(fd));state.config=await fetchJson('/api/config');state.configSnapshot=configFingerprint(state.config);await refreshAll();return false;}
 
 // Console
 function renderConsole(){

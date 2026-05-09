@@ -199,14 +199,16 @@ void serviceMqttClient() {
         Serial.print("[MQTT] resolved "); Serial.print(config.mqttHost);
         Serial.print(" -> "); Serial.println(ip);
         
-        // Initiate TCP connect with 0 timeout. This makes connect() 
-        // return immediately while the SYN happens in the background.
-        wifiClient.setTimeout(0);
-        wifiClient.connect(sResolvedIp, config.mqttPort);
+        // Initiate TCP connect with short timeout (100ms).
+        // This is long enough to let the stack start the handshake,
+        // but short enough to keep the UI spinner fluid.
+        wifiClient.setTimeout(100);
+        bool started = wifiClient.connect(sResolvedIp, config.mqttPort);
         
+        // We poll for the remainder of the handshake in the next state.
         sState = MqttReconnectState::CONNECTING;
         sStateEnteredMs = now;
-        Serial.println("[MQTT] TCP SYN sent -> CONNECTING (background)");
+        Serial.println("[MQTT] TCP SYN initiated -> CONNECTING (background)");
       } else {
         Serial.print("[MQTT] DNS failed for "); Serial.println(config.mqttHost);
         _setStatus("DNS fail", 2000);
