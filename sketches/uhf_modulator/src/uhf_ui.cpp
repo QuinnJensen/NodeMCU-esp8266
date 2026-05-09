@@ -170,19 +170,6 @@ static void uhfRoutes() {
 
 static void uhfDeferred() {
   serviceUhfDeferred();
-#ifdef SHARED_LIB_USE_ONEWIRE
-  if (webRequestSensorScan || pendingScan) {
-    webRequestSensorScan = false;
-    pendingScan = false;
-    setStatusMessage("scan running", 1200);
-    scanSensors(true);
-    yield();
-    readTemperatures();
-    lastSensorSampleMs = millis();
-    publishUhfStatus(false);
-    yield();
-  }
-#endif
 }
 
 void registerUhfUiHooks() {

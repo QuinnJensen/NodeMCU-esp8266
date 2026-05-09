@@ -115,6 +115,7 @@ bool setSensorNameByAddress(const char* address, const char* newName) {
 
 void resolveSensorNamesFromAddresses() {
   for (uint8_t i = 0; i < sensorCount; i++) {
+    yield();
     sensorNames[i][0] = 0;
     String addr = addressToString(sensorAddresses[i]);
     for (uint8_t j = 0; j < sensorNameRecordCount; j++) {

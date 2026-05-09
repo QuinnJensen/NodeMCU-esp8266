@@ -34,19 +34,20 @@ void initHeaterIo() {
 static void IRAM_ATTR modulatorIsr() {
   simTickCount++;
   
-  // Reading hardware RNG register directly (IRAM-safe)
-  uint32_t hw_rand = *(volatile uint32_t *)0x3FF20E44;
+  // Pure-software XORShift PRNG (100% IRAM-safe, no hardware register dependency)
+  static uint32_t y = 0x12345678;
+  y ^= y << 13;
+  y ^= y >> 17;
+  y ^= y << 5;
   
-  // Dithering: range -15 to +15.
-  // Using bitwise & instead of % to avoid non-IRAM modulo helper functions
-  // which can cause random reboots on ESP8266 during ISR.
-  int8_t dither = (int8_t)((hw_rand & 0x1F) - 15);
-  
-  // Scale everything to 1000 for 1% resolution + dithering headroom.
-  // Using signed int32 for bresAcc to safely handle the comparison with dither.
+  // Dither the threshold (-15 to +15)
+  // This breaks phase-lock without causing Bresenham accumulation artifacts.
+  int16_t dither = (int16_t)((y & 0x1F) - 15);
+  uint16_t threshold = 1000 + dither;
+
   bresAcc += (isrPowerPct * 10);
   
-  if (bresAcc + dither >= 1000) {
+  if (bresAcc >= threshold) {
     bresAcc -= 1000;
     isrOutputState = 1;
     GPOS = (1 << WH_SSR_SIM_PIN);

@@ -104,6 +104,7 @@ void setup() {
 static unsigned long lastRssiMs = 0;
 #ifdef SHARED_LIB_USE_ONEWIRE
 static bool waitingTempCollect = false;
+extern bool pendingScan;
 #endif
 
 void loop() {
@@ -127,20 +128,33 @@ void loop() {
   }
 
 #ifdef SHARED_LIB_USE_ONEWIRE
-  // Async 1-Wire sample loop -- if any sensors detected/configured, read every heartbeat
+  // Async 1-Wire Task Machine
+  // Prevents heartbeat scans from colliding with manual web/MQTT requests
+  bool heartbeatDue = (now - lastSensorHeartbeatMs >= sensorheartbeatintervalms);
+  bool manualRequest = (webRequestSensorScan || pendingScan);
+
   if (waitingTempCollect && conversionPending && now - conversionRequestedMs >= 800) {
     collectTemperatureResults();
     waitingTempCollect = false;
+    // If this was a manual request, publish update immediately
+    if (manualRequest) publishHeaterStatus(false);
   }
-  if (now - lastSensorHeartbeatMs >= sensorheartbeatintervalms) {
-    scanSensors();
+
+  if (!waitingTempCollect && (heartbeatDue || manualRequest)) {
+    bool forceScan = manualRequest;
+    webRequestSensorScan = false;
+    pendingScan = false;
+    
+    if (forceScan) setStatusMessage("scan running", 1200);
+    
+    scanSensors(forceScan);
     requestTemperatureConversion();
     waitingTempCollect = true;
     lastSensorHeartbeatMs = now;
   }
 #endif
 
-  // Refresh display power readout occasionally (calibration may shift)
+  // Refresh display power readout occasionally
   static unsigned long lastRefresh = 0;
   if (now - lastRefresh >= 1000) {
     lastRefresh = now;

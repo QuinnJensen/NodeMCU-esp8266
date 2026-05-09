@@ -194,22 +194,8 @@ static void heaterRoutes() {
 
 // ── Deferred actions ───────────────────────────────────────────────────────
 extern void serviceHeaterDeferred();
-extern bool pendingScan;
 static void heaterDeferred() {
   serviceHeaterDeferred();
-#ifdef SHARED_LIB_USE_ONEWIRE
-  if (webRequestSensorScan || pendingScan) {
-    webRequestSensorScan = false;
-    pendingScan = false;
-    setStatusMessage("scan running", 1200);
-    scanSensors(true);
-    yield();
-    readTemperatures();
-    lastSensorSampleMs = millis();
-    publishHeaterStatus(false);
-    yield();
-  }
-#endif
 }
 
 void registerHeaterUiHooks() {
