@@ -13,7 +13,8 @@ bool loadSensorNames() {
   if (!LittleFS.exists(sensornamefile)) return false;
   File f = LittleFS.open(sensornamefile, "r");
   if (!f) return false;
-  StaticJsonDocument<768> doc;
+  static StaticJsonDocument<768> doc;
+  doc.clear();
   DeserializationError err = deserializeJson(doc, f);
   f.close();
   if (err) return false;
@@ -46,7 +47,8 @@ bool saveSensorNames() {
       sensorNameRecordCount++;
     }
   }
-  StaticJsonDocument<768> doc;
+  static StaticJsonDocument<768> doc;
+  doc.clear();
   JsonArray arr = doc.createNestedArray("sensors");
   for (uint8_t j = 0; j < sensorNameRecordCount; j++) {
     if (!sensorNameRecords[j].address[0]) continue;
@@ -54,6 +56,7 @@ bool saveSensorNames() {
     s["address"] = sensorNameRecords[j].address;
     s["name"] = sensorNameRecords[j].name;
   }
+  yield();
   File f = LittleFS.open(sensornamefile, "w");
   if (!f) return false;
   serializeJson(doc, f);

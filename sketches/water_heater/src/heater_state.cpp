@@ -15,7 +15,7 @@ extern "C" {
 
 volatile uint8_t  isrPowerPct    = 0;
 volatile uint8_t  isrOutputState = 0;
-static volatile uint16_t bresAcc = 0;
+static volatile int32_t bresAcc  = 0;
 volatile uint32_t simTickCount   = 0;
 volatile uint32_t simOnTickCount = 0;
 
@@ -33,9 +33,21 @@ void initHeaterIo() {
 
 static void IRAM_ATTR modulatorIsr() {
   simTickCount++;
-  bresAcc += isrPowerPct;
-  if (bresAcc >= 100) {
-    bresAcc -= 100;
+  
+  // Reading hardware RNG register directly (IRAM-safe)
+  uint32_t hw_rand = *(volatile uint32_t *)0x3FF20E44;
+  
+  // Dithering: range -15 to +15.
+  // Using bitwise & instead of % to avoid non-IRAM modulo helper functions
+  // which can cause random reboots on ESP8266 during ISR.
+  int8_t dither = (int8_t)((hw_rand & 0x1F) - 15);
+  
+  // Scale everything to 1000 for 1% resolution + dithering headroom.
+  // Using signed int32 for bresAcc to safely handle the comparison with dither.
+  bresAcc += (isrPowerPct * 10);
+  
+  if (bresAcc + dither >= 1000) {
+    bresAcc -= 1000;
     isrOutputState = 1;
     GPOS = (1 << WH_SSR_SIM_PIN);
     simOnTickCount++;
