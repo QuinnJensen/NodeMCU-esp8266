@@ -134,11 +134,10 @@ function configFingerprint(c){if(!c)return '';return JSON.stringify({h:c.mqtthos
 function snapshotConfig(){state.configSnapshot=configFingerprint(state.config);}
 function injectStaleConfigBanner(){if(document.getElementById('stale-config-banner'))return;const page=document.getElementById('page-settings');if(!page)return;const banner=document.createElement('div');banner.id='stale-config-banner';banner.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;margin-bottom:14px;background:rgba(217,164,65,.13);border:1px solid rgba(217,164,65,.4);border-radius:12px;font-size:14px;color:#efc374;grid-column:1/-1';banner.innerHTML=`<span>\u26a0 Settings were changed by another session.</span><span style='display:flex;gap:8px;flex-shrink:0'><button class='btn secondary' style='font-size:13px;padding:6px 12px' onclick='forceRenderSettings()'>Reload Settings</button></span>`;page.insertBefore(banner,page.firstChild);}
 function renderChrome(){const s=state.status||{};document.getElementById('badge-id').textContent=s.id||'-';document.getElementById('badge-wifi').textContent=s.wifi_connected?'up':'down';document.getElementById('badge-mqtt').textContent=s.mqtt_connected?'up':'down';if(s.build_version)document.getElementById('badge-version').textContent=s.build_version;}
-function renderDashboard(){const s=state.status||{};const pct=s.power_percent??0;const w=s.est_power_watts??0;const a=s.est_current_amps??0;const sim=s.sim_output?'ON':'OFF';
+function renderDashboard(){const s=state.status||{};const pct=s.power_percent??0;const w=s.est_power_watts??0;const a=s.est_current_amps??0;
   document.getElementById('page-dashboard').innerHTML=
-    `<div class='grid three'>`+
+    `<div class='grid two'>`+
       `<div class='card'><div class='muted'>Power</div><div class='kpi'>${pct}%</div><div class='small muted'>${Number(w).toFixed(0)} W &nbsp; ${Number(a).toFixed(2)} A</div><div class='bar-wrap'><div class='bar-fill' style='width:${pct}%'></div></div></div>`+
-      `<div class='card'><div class='muted'>Modulator</div><div class='kpi'>${sim}</div><div class='small muted'>ticks ${s.sim_ticks??0} / on ${s.sim_on_ticks??0}</div></div>`+
       `<div class='card'><div class='muted'>Uptime</div><div class='kpi'>${Math.floor((s.uptime_ms||0)/1000)}s</div><div class='small muted'>RSSI ${s.rssidbm??'-'} dBm &middot; Heap ${s.freeheap??0}</div></div>`+
     `</div>`+
     `<div class='grid two'>`+
