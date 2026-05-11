@@ -10,6 +10,7 @@
 
 extern volatile uint8_t  isrPowerPct;
 extern volatile uint8_t  isrOutputState;
+extern volatile bool     isrThermalHalt;
 extern volatile uint32_t simTickCount;
 extern volatile uint32_t simOnTickCount;
 

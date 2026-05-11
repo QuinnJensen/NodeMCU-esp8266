@@ -12,6 +12,7 @@
 // Global state for Bresenham modulator (volatile and explicitly in DRAM)
 volatile uint8_t  isrPowerPct    __attribute__((section(".iram.data"))) = 0;
 volatile uint8_t  isrOutputState __attribute__((section(".iram.data"))) = 0;
+volatile bool     isrThermalHalt __attribute__((section(".iram.data"))) = false;
 volatile uint32_t simTickCount   __attribute__((section(".iram.data"))) = 0;
 volatile uint32_t simOnTickCount __attribute__((section(".iram.data"))) = 0;
 
@@ -42,12 +43,16 @@ static void IRAM_ATTR modulatorIsr() {
   if (bresAcc >= 100) {
     bresAcc -= 100;
     
-    // Assert gate high for ~18.5 ms to span both zero-crossings.
-    GPOS = (1 << WH_SSR_SIM_PIN);
-    gateOffAtMic = micros() + 18500UL;
-    ssrGateActive = true;
-    isrOutputState = 1;
-    simOnTickCount++;
+    // Safety check: only fire if the thermal watchdog hasn't tripped.
+    // If halted, the gate remains at zero.
+    if (!isrThermalHalt) {
+      // Assert gate high for ~18.5 ms to span both zero-crossings.
+      GPOS = (1 << WH_SSR_SIM_PIN);
+      gateOffAtMic = micros() + 18500UL;
+      ssrGateActive = true;
+      isrOutputState = 1;
+      simOnTickCount++;
+    }
   }
 }
 

@@ -137,6 +137,25 @@ void loop() {
   if (waitingTempCollect && conversionPending && now - conversionRequestedMs >= 800) {
     collectTemperatureResults();
     waitingTempCollect = false;
+
+    // Thermal watchdog check
+    bool overTemp = false;
+    bool disconnected = (sensorCount > 0); // Start true if we expect sensors
+    for (uint8_t i = 0; i < sensorCount; i++) {
+      if (!sensorPresent[i] || isnan(sensorTempsC[i])) { disconnected = true; break; }
+      else disconnected = false; // At least one is ok
+
+      if (sensorTempsC[i] > 60.0f) { overTemp = true; break; } // Safety limit
+    }
+    
+    // Default gate to zero if unsafe
+    if (disconnected || overTemp) {
+      if (!isrThermalHalt) consoleLog(CLOG_WARN, overTemp ? "SAFETY: Over-temperature!" : "SAFETY: Sensors lost!");
+      isrThermalHalt = true;
+    } else {
+      isrThermalHalt = false;
+    }
+
     // If this was a manual request, publish update immediately
     if (manualRequest) publishHeaterStatus(false);
   }
