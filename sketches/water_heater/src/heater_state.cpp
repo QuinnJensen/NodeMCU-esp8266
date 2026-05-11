@@ -9,10 +9,6 @@
 #define WH_TIMER1_DIVIDER TIM_DIV16
 #define WH_TIMER1_TICKS ((5000000UL / WH_MODULATOR_HZ) - 1)
 
-extern "C" {
-  #include "user_interface.h"
-}
-
 // Global state for Bresenham modulator (volatile and explicitly in DRAM)
 volatile uint8_t  isrPowerPct    __attribute__((section(".iram.data"))) = 0;
 volatile uint8_t  isrOutputState __attribute__((section(".iram.data"))) = 0;
@@ -40,28 +36,22 @@ static void IRAM_ATTR modulatorIsr() {
   simTickCount++;
   
   // Accumulate power. 60Hz tick = 1 full AC cycle.
-  // Multiply by 10 using shifts and adds (isrPowerPct * 10)
-  uint32_t p10 = ((uint32_t)isrPowerPct << 3) + ((uint32_t)isrPowerPct << 1);
-  bresAcc += (int32_t)p10;
+  // Direct Bresenham on 100 scale as per redesign document.
+  bresAcc += (int32_t)isrPowerPct;
   
-  if (bresAcc >= 1000) {
-    bresAcc -= 1000;
+  if (bresAcc >= 100) {
+    bresAcc -= 100;
     
-    // Assert gate high for ~18.5 ms. This ensures we span both zero-crossings
-    // of a full 60Hz AC cycle (16.67 ms) even with free-running timer drift.
+    // Assert gate high for ~18.5 ms to span both zero-crossings.
     GPOS = (1 << WH_SSR_SIM_PIN);
     gateOffAtMic = micros() + 18500UL;
     ssrGateActive = true;
     isrOutputState = 1;
     simOnTickCount++;
   }
-  // Note: We do NOT de-assert gate in the 'else' branch. 
-  // It is handled by the one-shot poller in the main loop.
 }
 
 void serviceModulatorOneShot() {
-  // If the gate is active, check if the one-shot window (~18.5ms) has elapsed.
-  // Using signed long math to correctly handle micros() rollover.
   if (ssrGateActive && (long)(micros() - gateOffAtMic) >= 0) {
     GPOC = (1 << WH_SSR_SIM_PIN);
     ssrGateActive = false;
