@@ -6,13 +6,13 @@
 #define WH_FULL_SCALE_WATTS 1800.0f
 #define WH_NOMINAL_VRMS     120.0f
 #define WH_CAL_POINTS       10
-#define WH_MODULATOR_HZ     60UL
+#define WH_MODULATOR_HZ     120UL
 
-extern volatile uint8_t  isrPowerPct;
-extern volatile uint8_t  isrOutputState;
-extern volatile bool     isrThermalHalt;
-extern volatile uint32_t simTickCount;
-extern volatile uint32_t simOnTickCount;
+extern volatile uint8_t  isrPowerPct    __attribute__((section(".iram.data")));
+extern volatile uint8_t  isrOutputState __attribute__((section(".iram.data")));
+extern volatile bool     isrThermalHalt __attribute__((section(".iram.data")));
+extern volatile uint32_t simTickCount   __attribute__((section(".iram.data")));
+extern volatile uint32_t simOnTickCount __attribute__((section(".iram.data")));
 
 extern int requestedPowerPct;
 extern int priorPowerPct;
@@ -23,7 +23,6 @@ extern float calTable[WH_CAL_POINTS];
 
 void initHeaterIo();
 void startModulator();
-void serviceModulatorOneShot();
 void clearCalibrationTable();
 bool hasAnyCalibration();
 bool loadCalibration();

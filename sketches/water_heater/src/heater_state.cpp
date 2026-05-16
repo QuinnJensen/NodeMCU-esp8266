@@ -18,8 +18,7 @@ volatile uint32_t simOnTickCount __attribute__((section(".iram.data"))) = 0;
 
 // Variables used by ISR MUST be in DRAM (not Flash) on ESP8266.
 static volatile int32_t bresAcc            __attribute__((section(".iram.data"))) = 0;
-static volatile unsigned long gateOffAtMic __attribute__((section(".iram.data"))) = 0;
-static volatile bool ssrGateActive         __attribute__((section(".iram.data"))) = false;
+static volatile uint8_t isrGateTimer       __attribute__((section(".iram.data"))) = 0;
 
 int requestedPowerPct = 0;
 int priorPowerPct = 0;
@@ -29,41 +28,61 @@ unsigned long powerLevelChangedMs = 0;
 float calTable[WH_CAL_POINTS];
 
 void initHeaterIo() {
+  Serial.print("[MOD] Initializing SSR Pin (D1/GPIO5)... ");
   pinMode(WH_SSR_SIM_PIN, OUTPUT);
   digitalWrite(WH_SSR_SIM_PIN, LOW);
+  
+  noInterrupts();
+  bresAcc = 0;
+  simTickCount = 0;
+  simOnTickCount = 0;
+  isrPowerPct = 0;
+  isrThermalHalt = false;
+  isrGateTimer = 0;
+  interrupts();
+  Serial.println("done.");
 }
 
 static void IRAM_ATTR modulatorIsr() {
-  static bool pinInited = false;
-  if (!pinInited) {
-    pinMode(WH_SSR_SIM_PIN, OUTPUT);
-    pinInited = true;
-  }
   simTickCount++;
   
-  // Accumulate power. 60Hz tick = 1 full AC cycle.
-  bresAcc += (int32_t)isrPowerPct;
-  
-  if (bresAcc >= 100) {
-    bresAcc -= 100;
+  // 1. De-assertion logic (One-shot window timing)
+  // We handle this FIRST to ensure a clean transition if a new 'ON' starts this same tick.
+  if (isrGateTimer > 0) {
+    if (--isrGateTimer == 0) {
+      GPOC = (1 << 5); // GPIO5 (D1) LOW
+      isrOutputState = 0;
+    }
+  }
+
+  // 2. Bresenham decision logic runs at 60Hz (every 2nd tick of the 120Hz timer)
+  if ((simTickCount % 2) == 0) {
+    // Safety: ensure isrPowerPct is within valid 0-100 range
+    uint8_t p = isrPowerPct;
+    if (p > 100) p = 100;
     
-    if (!isrThermalHalt) {
-      digitalWrite(WH_SSR_SIM_PIN, HIGH);
-      gateOffAtMic = micros() + 18500UL;
-      ssrGateActive = true;
-      isrOutputState = 1;
-      simOnTickCount++;
-      if (simOnTickCount % 60 == 0) Serial.println("[ISR] Gate HIGH");
+    bresAcc += (int32_t)p;
+    
+    if (bresAcc >= 100) {
+      bresAcc -= 100;
+      
+      // Safety: Prevent accumulator runaway
+      if (bresAcc > 100) bresAcc = 0;
+
+      if (!isrThermalHalt && p > 0) {
+        // Assert gate high for exactly 2 ticks (2 * 8.333ms = 16.666ms)
+        // This is the 'Perfect Pulse' for a 60Hz zero-cross SSR.
+        GPOS = (1 << 5); // GPIO5 (D1) HIGH
+        isrOutputState = 1;
+        isrGateTimer = 2; 
+        simOnTickCount++;
+      }
     }
   }
 }
 
 void serviceModulatorOneShot() {
-  if (ssrGateActive && (long)(micros() - gateOffAtMic) >= 0) {
-    digitalWrite(WH_SSR_SIM_PIN, LOW);
-    ssrGateActive = false;
-    isrOutputState = 0;
-  }
+  // Logic removed; de-assertion is now handled in the 120Hz ISR
 }
 
 void startModulator() {
@@ -241,6 +260,7 @@ void appendHeaterStateToJson(JsonDocument& doc) {
   doc["sim_output"] = simState;
   doc["sim_ticks"] = ticks;
   doc["sim_on_ticks"] = onTicks;
+  doc["isr_thermal_halt"] = isrThermalHalt;
   doc["calibration_enabled"] = hasAnyCalibration();
   JsonArray cal = doc.createNestedArray("calibration_points");
   for (int i = 0; i < WH_CAL_POINTS; i++) cal.add(calTable[i]);
