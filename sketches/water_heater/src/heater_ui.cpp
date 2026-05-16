@@ -19,12 +19,16 @@
 
 // ── Display body: power state, bar, temps if any ───────────────────────────
 static void heaterBody() {
+  float currentAmps = estimateCurrentAmps((float)displayedPowerWatts);
+
   display.setCursor(0, 18);
   display.print("P ");
   display.print(requestedPowerPct);
   display.print("% ");
   display.print(displayedPowerWatts);
-  display.print("W");
+  display.print("W ");
+  display.print(currentAmps, 1);
+  display.print("A");
 
   // Power bar
   int x=0, y=29, w=128, h=10;
