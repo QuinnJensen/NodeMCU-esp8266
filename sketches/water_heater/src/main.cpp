@@ -157,6 +157,8 @@ void loop() {
     collectTemperatureResults();
     waitingTempCollect = false;
 
+    if (mqtt.connected()) publishPerSensorStatuses();
+
     // Thermal watchdog check
     bool overTemp = false;
     bool disconnected = (sensorCount > 0); // Start true if we expect sensors

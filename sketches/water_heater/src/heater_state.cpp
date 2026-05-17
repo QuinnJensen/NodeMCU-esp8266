@@ -251,10 +251,14 @@ void appendHeaterStateToJson(JsonDocument& doc) {
   interrupts();
 
   float estWatts = estimateCorrectedWatts(requestedPowerPct);
+  float estAmps = estimateCurrentAmps(estWatts);
   doc["power_percent"] = requestedPowerPct;
+  doc["power_pct"]     = requestedPowerPct; // Alias
   doc["prior_power_percent"] = priorPowerPct;
   doc["est_power_watts"] = estWatts;
-  doc["est_current_amps"] = estimateCurrentAmps(estWatts);
+  doc["power_w"]         = estWatts; // Alias
+  doc["est_current_amps"] = estAmps;
+  doc["current_a"]        = estAmps; // Alias
   doc["seconds_since_last_command"] = (millis() - lastCommandMs) / 1000UL;
   doc["seconds_at_current_power_level"] = (millis() - powerLevelChangedMs) / 1000UL;
   doc["sim_output"] = simState;

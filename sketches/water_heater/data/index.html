@@ -139,7 +139,7 @@ async function fetchLiveData(){
   state.status=await fetchJson('/api/status');
   try{state.temps=await fetchJson('/api/temps');}catch(e){state.temps={sensors:state.status.sensors||[]};}
 }
-function configFingerprint(c){if(!c)return '';return JSON.stringify({h:c.mqtthost||'',p:c.mqttport??0,mcub:c.mcubasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',pp:c.prometheusport??0,tz:c.timezone||''});}
+function configFingerprint(c){if(!c)return '';return JSON.stringify({h:c.mqtthost||'',p:c.mqttport??0,mcub:c.mcubasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',pp:c.prometheusport??0,tz:c.timezone||'',le:!!c.led_enabled});}
 function snapshotConfig(){state.configSnapshot=configFingerprint(state.config);}
 function injectStaleConfigBanner(){if(document.getElementById('stale-config-banner'))return;const page=document.getElementById('page-settings');if(!page)return;const banner=document.createElement('div');banner.id='stale-config-banner';banner.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;margin-bottom:14px;background:rgba(217,164,65,.13);border:1px solid rgba(217,164,65,.4);border-radius:12px;font-size:14px;color:#efc374;grid-column:1/-1';banner.innerHTML=`<span>\u26a0 Settings were changed by another session.</span><span style='display:flex;gap:8px;flex-shrink:0'><button class='btn secondary' style='font-size:13px;padding:6px 12px' onclick='forceRenderSettings()'>Reload Settings</button></span>`;page.insertBefore(banner,page.firstChild);}
 function renderChrome(){const s=state.status||{};document.getElementById('badge-id').textContent=s.id||'-';document.getElementById('badge-wifi').textContent=s.wifi_connected?'up':'down';document.getElementById('badge-mqtt').textContent=s.mqtt_connected?'up':'down';if(s.build_version)document.getElementById('badge-version').textContent=s.build_version;}
@@ -245,6 +245,7 @@ function renderSensorNamesTable(rebuild=true){
 function renderSettings(){
   if(state.settingsRendered)return;state.settingsRendered=true;
   const c=state.config||{};
+  const ledChecked=c.led_enabled?'checked':'';
   document.getElementById('page-settings').innerHTML=
     `<div class='card' style='grid-column:1/-1'><h3>Sensor Names</h3><p class='muted small'>Names are persisted by address. Live readings update automatically.</p><table class='table'><thead><tr><th>#</th><th>Address</th><th>Current Name</th><th>Temp</th><th>Rename</th></tr></thead><tbody id='sn-tbody'></tbody></table></div>`+
     `<div class='card'><h3>MQTT &amp; Prometheus</h3><form onsubmit='return saveServices(event)'>`+
@@ -256,10 +257,12 @@ function renderSettings(){
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' value='${c.prometheusport??9111}'></div>`+
       `<button class='btn' type='submit'>Save</button>`+
     `</form><p class='small muted'>Topics: <span class='mono'>${esc((c.topics||{}).command||'-')}</span> / <span class='mono'>${esc((c.topics||{}).status||'-')}</span></p></div>`+
+    `<div class='card'><h3>Display &amp; LEDs</h3><div style='display:flex;align-items:center;justify-content:space-between;padding:.5rem 0'><div><div style='font-size:.9rem'>Blue LED flash</div><div class='small muted'>Flashes on sensor reads when enabled</div></div><label style='position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0'><input type='checkbox' id='led-toggle' ${ledChecked} style='opacity:0;width:0;height:0;position:absolute'><span id='led-slider' style='position:absolute;inset:0;background:${c.led_enabled?'var(--accent)':'#333'};border-radius:24px;cursor:pointer;transition:.2s'><span id='led-knob' style='position:absolute;width:18px;height:18px;left:${c.led_enabled?'23':'3'}px;bottom:3px;background:${c.led_enabled?'#fff':'#888'};border-radius:50%;transition:.2s'></span></span></label></div><div class='actions' style='margin-top:.75rem'><button class='btn' onclick='saveLed()'>Save LED Settings</button></div></div>`+
     `<div class='card'><h3>Timezone</h3><form onsubmit='return saveTz(event)'><div class='field'><label>POSIX TZ</label><input name='timezone' value='${esc(c.timezone||'')}'></div><button class='btn' type='submit'>Save</button></form></div>`;
   renderSensorNamesTable(true);
 }
 function forceRenderSettings(){state.settingsRendered=false;renderSettings();}
+async function saveLed(){const chk=document.getElementById('led-toggle');if(!chk)return;try{await postForm('/api/config/display',{led_enabled:chk.checked?'1':'0'});state.config=await fetchJson('/api/config');state.configSnapshot=configFingerprint(state.config);forceRenderSettings();}catch(e){console.warn(e);}}
 async function saveServices(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/services',Object.fromEntries(fd));state.config=await fetchJson('/api/config');state.configSnapshot=configFingerprint(state.config);await refreshAll();return false;}
 async function saveTz(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/time',Object.fromEntries(fd));state.config=await fetchJson('/api/config');state.configSnapshot=configFingerprint(state.config);await refreshAll();return false;}
 async function renameSensor(ev,index){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/sensors/rename',{index,name:fd.get('name')});await refreshAll();return false;}

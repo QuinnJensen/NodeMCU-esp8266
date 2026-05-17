@@ -68,6 +68,35 @@ void publishHeaterStatus(bool retained) {
   publishJsonDocToTopic(statusTopic, doc, retained);
 }
 
+#ifdef SHARED_LIB_USE_ONEWIRE
+void publishPerSensorStatuses() {
+  if (!mqtt.connected()) return;
+
+  for (uint8_t i = 0; i < sensorCount; i++) {
+    StaticJsonDocument<512> doc;
+    doc["type"] = "sensor_status";
+    doc["id"] = safeDeviceId();
+    doc["index"] = i + 1;
+    doc["name"] = sensorNames[i];
+    doc["address"] = sensorAddressString(i);
+    doc["connected"] = sensorPresent[i];
+    if (!isnan(sensorTempsC[i])) {
+      doc["tempc"] = sensorTempsC[i];
+      doc["tempf"] = sensorTempsC[i] * 9.0f / 5.0f + 32.0f;
+    }
+
+    String topic = String(config.sensorBaseTopic) + "/" +
+                   sanitizeTopicPart(safeDeviceId()) + "/sensor/" +
+                   sanitizeTopicPart(sensorNames[i]);
+
+    if (!publishJsonDocToTopic(topic.c_str(), doc, false)) {
+      Serial.print("[MQTT] per-sensor publish failed index=");
+      Serial.println(i);
+    }
+  }
+}
+#endif
+
 void publishFilesystemListing() {
   FSInfo info;
   DynamicJsonDocument doc(2048);
