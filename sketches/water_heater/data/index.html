@@ -130,13 +130,16 @@ button,input{font:inherit}
 const POLL_BASE=8000;
 const state={status:null,temps:null,config:null,configSnapshot:null,console:{lastSeq:0,timer:null,history:[],histIdx:-1,autoscroll:true},poll:{interval:POLL_BASE},page:'dashboard',busy:false,modalOpen:false,filesLoaded:false,settingsRendered:false};
 const esc=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+const tempF=c=>(Number(c)*9/5+32).toFixed(1);
+const fmtBool=v=>v?'Yes':'No';
+const ageSec=ms=>{if(!ms)return '0s';return Math.floor(ms/1000)+'s';};
 async function fetchJson(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(u);return r.json();}
 const postForm=(u,o)=>{const fd=new URLSearchParams();Object.entries(o).forEach(([k,v])=>fd.append(k,v));return fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd.toString()});};
 async function fetchLiveData(){
   state.status=await fetchJson('/api/status');
   try{state.temps=await fetchJson('/api/temps');}catch(e){state.temps={sensors:state.status.sensors||[]};}
 }
-function configFingerprint(c){if(!c)return '';return JSON.stringify({h:c.mqtthost||'',p:c.mqttport??0,b:c.basetopic||'',d:c.deviceid||'',pp:c.prometheusport??0,tz:c.timezone||''});}
+function configFingerprint(c){if(!c)return '';return JSON.stringify({h:c.mqtthost||'',p:c.mqttport??0,cb:c.controlbasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',pp:c.prometheusport??0,tz:c.timezone||''});}
 function snapshotConfig(){state.configSnapshot=configFingerprint(state.config);}
 function injectStaleConfigBanner(){if(document.getElementById('stale-config-banner'))return;const page=document.getElementById('page-settings');if(!page)return;const banner=document.createElement('div');banner.id='stale-config-banner';banner.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;margin-bottom:14px;background:rgba(217,164,65,.13);border:1px solid rgba(217,164,65,.4);border-radius:12px;font-size:14px;color:#efc374;grid-column:1/-1';banner.innerHTML=`<span>\u26a0 Settings were changed by another session.</span><span style='display:flex;gap:8px;flex-shrink:0'><button class='btn secondary' style='font-size:13px;padding:6px 12px' onclick='forceRenderSettings()'>Reload Settings</button></span>`;page.insertBefore(banner,page.firstChild);}
 function renderChrome(){const s=state.status||{};document.getElementById('badge-id').textContent=s.id||'-';document.getElementById('badge-wifi').textContent=s.wifi_connected?'up':'down';document.getElementById('badge-mqtt').textContent=s.mqtt_connected?'up':'down';if(s.build_version)document.getElementById('badge-version').textContent=s.build_version;}
@@ -247,7 +250,8 @@ function renderSettings(){
     `<div class='card'><h3>MQTT &amp; Prometheus</h3><form onsubmit='return saveServices(event)'>`+
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='field'><label>MQTT port</label><input name='mqttport' type='number' value='${c.mqttport??1883}'></div>`+
-      `<div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div>`+
+      `<div class='field'><label>Control base topic</label><input name='controlbasetopic' value='${esc(c.controlbasetopic||'')}'></div>`+
+      `<div class='field'><label>Sensor base topic</label><input name='sensorbasetopic' value='${esc(c.sensorbasetopic||'')}'></div>`+
       `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' value='${c.prometheusport??9111}'></div>`+
       `<button class='btn' type='submit'>Save</button>`+

@@ -82,13 +82,14 @@ static void handleApiStatus() {
 
 static void handleApiConfig() {
   DynamicJsonDocument doc(2048);
-  doc["mqtthost"]       = config.mqttHost;
-  doc["mqttport"]       = config.mqttPort;
-  doc["basetopic"]      = config.baseTopic;
-  doc["deviceid"]       = safeDeviceId();
-  doc["prometheusport"] = config.prometheusPort;
-  doc["led_enabled"]    = config.ledEnabled;
-  doc["timezone"]       = config.timezone;
+  doc["mqtthost"]          = config.mqttHost;
+  doc["mqttport"]          = config.mqttPort;
+  doc["controlbasetopic"]  = config.controlBaseTopic;
+  doc["sensorbasetopic"]   = config.sensorBaseTopic;
+  doc["deviceid"]          = safeDeviceId();
+  doc["prometheusport"]    = config.prometheusPort;
+  doc["led_enabled"]       = config.ledEnabled;
+  doc["timezone"]          = config.timezone;
 
   JsonObject topics = doc.createNestedObject("topics");
   topics["command"] = commandTopic;
@@ -189,11 +190,12 @@ static void handlePostConsoleCommand() {
 static void handlePostServicesConfig() {
   bool changed = false;
   bool mqttChanged = false;
-  if (webServer.hasArg("mqtthost"))       { bool c = setMqttHostValue(webServer.arg("mqtthost").c_str()); changed |= c; mqttChanged |= c; }
-  if (webServer.hasArg("mqttport"))       { bool c = setMqttPortValue((uint16_t)webServer.arg("mqttport").toInt()); changed |= c; mqttChanged |= c; }
-  if (webServer.hasArg("basetopic"))      { bool c = setBaseTopicValue(webServer.arg("basetopic").c_str()); changed |= c; mqttChanged |= c; }
-  if (webServer.hasArg("deviceid"))       { bool c = setDeviceIdValue(webServer.arg("deviceid").c_str()); changed |= c; mqttChanged |= c; }
-  if (webServer.hasArg("prometheusport")) changed |= setPrometheusPortValue((uint16_t)webServer.arg("prometheusport").toInt());
+  if (webServer.hasArg("mqtthost"))          { bool c = setMqttHostValue(webServer.arg("mqtthost").c_str()); changed |= c; mqttChanged |= c; }
+  if (webServer.hasArg("mqttport"))          { bool c = setMqttPortValue((uint16_t)webServer.arg("mqttport").toInt()); changed |= c; mqttChanged |= c; }
+  if (webServer.hasArg("controlbasetopic"))  { bool c = setControlBaseTopicValue(webServer.arg("controlbasetopic").c_str()); changed |= c; mqttChanged |= c; }
+  if (webServer.hasArg("sensorbasetopic"))   { bool c = setSensorBaseTopicValue(webServer.arg("sensorbasetopic").c_str()); changed |= c; mqttChanged |= c; }
+  if (webServer.hasArg("deviceid"))          { bool c = setDeviceIdValue(webServer.arg("deviceid").c_str()); changed |= c; mqttChanged |= c; }
+  if (webServer.hasArg("prometheusport"))    changed |= setPrometheusPortValue((uint16_t)webServer.arg("prometheusport").toInt());
   
   saveConfig();
   if (mqttChanged) notifyMqttConfigChanged();

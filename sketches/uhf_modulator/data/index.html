@@ -151,7 +151,8 @@ function renderSettings(){
     `<div class='card'><h3>MQTT &amp; Prometheus</h3><form onsubmit='return saveServices(event)'>`+
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='field'><label>MQTT port</label><input name='mqttport' type='number' value='${c.mqttport??1883}'></div>`+
-      `<div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div>`+
+      `<div class='field'><label>Control base topic</label><input name='controlbasetopic' value='${esc(c.controlbasetopic||'')}'></div>`+
+      `<div class='field'><label>Sensor base topic</label><input name='sensorbasetopic' value='${esc(c.sensorbasetopic||'')}'></div>`+
       `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' value='${c.prometheusport??9111}'></div>`+
       `<button class='btn' type='submit'>Save</button></form>`+

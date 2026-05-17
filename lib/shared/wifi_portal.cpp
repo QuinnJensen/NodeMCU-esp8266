@@ -51,7 +51,7 @@ void startPortalAndConnect(bool forcePortal, const char* ssidSuffix) {
   snprintf(promPortBuf, sizeof(promPortBuf), "%u", config.prometheusPort);
   WiFiManagerParameter pMqttHost("mqtthost", "MQTT broker", config.mqttHost, sizeof(config.mqttHost));
   WiFiManagerParameter pMqttPort("mqttport", "MQTT port", mqttPortBuf, sizeof(mqttPortBuf));
-  WiFiManagerParameter pBaseTopic("basetopic", "Base topic", config.baseTopic, sizeof(config.baseTopic));
+  WiFiManagerParameter pBaseTopic("controlbasetopic", "Base topic (MCU)", config.controlBaseTopic, sizeof(config.controlBaseTopic));
   WiFiManagerParameter pDeviceId("deviceid", "Device ID", config.deviceId, sizeof(config.deviceId));
   WiFiManagerParameter pPromPort("prometheusport", "Prometheus port", promPortBuf, sizeof(promPortBuf));
   wm.addParameter(&pMqttHost);
@@ -76,7 +76,7 @@ void startPortalAndConnect(bool forcePortal, const char* ssidSuffix) {
     delay(1000);
   }
   strlcpy(config.mqttHost, pMqttHost.getValue(), sizeof(config.mqttHost));
-  strlcpy(config.baseTopic, pBaseTopic.getValue(), sizeof(config.baseTopic));
+  strlcpy(config.controlBaseTopic, pBaseTopic.getValue(), sizeof(config.controlBaseTopic));
   strlcpy(config.deviceId, pDeviceId.getValue(), sizeof(config.deviceId));
   if (!config.deviceId[0]) strlcpy(config.deviceId, "newKid", sizeof(config.deviceId));
   config.mqttPort = uint16_t(atoi(pMqttPort.getValue()));

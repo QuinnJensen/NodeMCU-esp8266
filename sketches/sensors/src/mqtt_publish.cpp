@@ -88,7 +88,7 @@ void publishPerSensorStatus(uint8_t i) {
     doc["tempf"] = sensorTempsC[i] * 9.0f / 5.0f + 32.0f;
   }
 
-  String topic = String(config.baseTopic) + "/" +
+  String topic = String(config.sensorBaseTopic) + "/" +
                  sanitizeTopicPart(safeDeviceId()) + "/sensor/" +
                  sanitizeTopicPart(sensorNames[i]);
 

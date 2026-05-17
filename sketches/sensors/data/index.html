@@ -213,7 +213,7 @@ function resetPollBackoff(){
 function configFingerprint(c){
   if(!c)return '';
   return JSON.stringify({
-    h:c.mqtthost||'',p:c.mqttport??0,b:c.basetopic||'',d:c.deviceid||'',
+    h:c.mqtthost||'',p:c.mqttport??0,cb:c.controlbasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',
     pp:c.prometheusport??0,le:!!c.led_enabled,
     wi:c.water?.intervalms??0,wt:(c.water?.thresholds||[]).join(',')
   });
@@ -485,7 +485,8 @@ function renderSettings(){
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport??1883}'></div>`+
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' min='1' max='65535' value='${c.prometheusport??9111}'></div></div>`+
-      `<div class='field'><label>Base topic</label><input name='basetopic' value='${esc(c.basetopic||'')}'></div>`+
+      `<div class='field'><label>Control base topic</label><input name='controlbasetopic' value='${esc(c.controlbasetopic||'')}'></div>`+
+      `<div class='field'><label>Sensor base topic</label><input name='sensorbasetopic' value='${esc(c.sensorbasetopic||'')}'></div>`+
       `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
       `<div class='actions'><button class='btn btn-action' type='submit'>Save Services</button></div>`+
     `</form></div>`+

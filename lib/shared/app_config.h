@@ -6,13 +6,17 @@
 #ifndef SHARED_LIB_DEFAULT_DEVICE_ID
 #define SHARED_LIB_DEFAULT_DEVICE_ID "newKid"
 #endif
-#ifndef SHARED_LIB_DEFAULT_BASE_TOPIC
-#define SHARED_LIB_DEFAULT_BASE_TOPIC "stat/w1"
+#ifndef SHARED_LIB_DEFAULT_CONTROL_TOPIC
+#define SHARED_LIB_DEFAULT_CONTROL_TOPIC "stat/mcu"
+#endif
+#ifndef SHARED_LIB_DEFAULT_SENSOR_TOPIC
+#define SHARED_LIB_DEFAULT_SENSOR_TOPIC "stat/w1"
 #endif
 
 struct AppConfig {
   char mqttHost[64]  = "192.168.1.50";
-  char baseTopic[64] = SHARED_LIB_DEFAULT_BASE_TOPIC;
+  char controlBaseTopic[64] = SHARED_LIB_DEFAULT_CONTROL_TOPIC;
+  char sensorBaseTopic[64]  = SHARED_LIB_DEFAULT_SENSOR_TOPIC;
   char deviceId[32]  = SHARED_LIB_DEFAULT_DEVICE_ID;
   char timezone[40]  = devicetz;
   uint16_t mqttPort          = 1883;
@@ -36,7 +40,8 @@ void buildTopics();
 bool loadConfig();
 bool saveConfig();
 bool setMqttHostValue(const char* host);
-bool setBaseTopicValue(const char* topic);
+bool setControlBaseTopicValue(const char* topic);
+bool setSensorBaseTopicValue(const char* topic);
 bool setDeviceIdValue(const char* id);
 bool setMqttPortValue(uint16_t port);
 bool setPrometheusPortValue(uint16_t port);
