@@ -47,27 +47,29 @@ static void heaterBody() {
   interrupts();
 
   display.setCursor(0, 42);
-  display.print("SIM:");
-  display.print(simState ? "ON " : "OFF");
 #ifdef SHARED_LIB_USE_ONEWIRE
+  if (useFakeSensors) display.print("(S) ");
+
   if (sensorCount > 0) {
-    display.setCursor(46, 42);
-    uint8_t idx = 0;
-    String name = sensorNames[idx][0] ? String(sensorNames[idx]) : String("S1");
-    if (name.length() > 5) name = name.substring(0, 5);
+    // Rotate through sensors every 3 seconds
+    uint8_t idx = (millis() / 3000) % sensorCount;
+    
+    String name = sensorNames[idx][0] ? String(sensorNames[idx]) : ("S" + String(idx + 1));
+    if (name.length() > 6) name = name.substring(0, 6);
     display.print(name);
-    display.print(" ");
+    display.print(": ");
+    
     if (!isnan(sensorTempsC[idx])) {
       display.print(String(sensorTempsC[idx] * 9.0f / 5.0f + 32.0f, 1));
       display.print("F");
-    } else display.print("disc");
+    } else {
+      display.print("disc");
+    }
   } else {
-    display.setCursor(70, 42);
     display.print("On:");
     display.print(onTicks % 1000);
   }
 #else
-  display.setCursor(70, 42);
   display.print("On:");
   display.print(onTicks % 1000);
 #endif
