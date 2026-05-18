@@ -123,6 +123,7 @@ button,input{font:inherit}
         <button data-page="console">Console</button>
         <button data-page="settings">Settings</button>
         <button data-page="files">LittleFS Files</button>
+        <button data-page="system">System</button>
       </div>
     </aside>
 
@@ -148,6 +149,7 @@ button,input{font:inherit}
       <section id="page-console"   class="page grid hidden"></section>
       <section id="page-settings"  class="page grid hidden"></section>
       <section id="page-files"     class="page grid hidden"></section>
+      <section id="page-system"    class="page grid hidden"></section>
     </main>
   </div>
 
@@ -213,7 +215,7 @@ function resetPollBackoff(){
 function configFingerprint(c){
   if(!c)return '';
   return JSON.stringify({
-    h:c.mqtthost||'',p:c.mqttport??0,cb:c.controlbasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',
+    h:c.mqtthost||'',p:c.mqttport??0,mcub:c.mcubasetopic||'',sb:c.sensorbasetopic||'',d:c.deviceid||'',
     pp:c.prometheusport??0,le:!!c.led_enabled,
     wi:c.water?.intervalms??0,wt:(c.water?.thresholds||[]).join(',')
   });
@@ -380,6 +382,16 @@ function renderDashboard(){
         `</div>`+
         `<p class='footer-note'>Actions are queued and executed after the HTTP response is sent to keep the ESP8266 responsive.</p>`+
       `</div>`+
+      `<div class='card' style='grid-column:1/-1'><h3>Pinout Reference</h3><p class='muted small'>Physical hardware mapping for the NodeMCU board.</p><table class='table small mono'><thead><tr><th>Pin</th><th>Function</th><th>Note</th></tr></thead><tbody>`+
+        `<tr><td>D0</td><td>Probe ON</td><td>Excitation for water probe</td></tr>`+
+        `<tr><td>D1</td><td>-</td><td>(Unused in this mission)</td></tr>`+
+        `<tr><td>D2</td><td>1-Wire</td><td>DS18B20 data bus</td></tr>`+
+        `<tr><td>D3</td><td>FLASH</td><td>Hold on boot for Config Portal</td></tr>`+
+        `<tr><td>D4</td><td>LED</td><td>Onboard Blue LED (Status)</td></tr>`+
+        `<tr><td>D5</td><td>OLED SDA</td><td>I2C Data</td></tr>`+
+        `<tr><td>D6</td><td>OLED SCL</td><td>I2C Clock</td></tr>`+
+        `<tr><td>A0</td><td>ADC</td><td>Water probe analog input</td></tr>`+
+      `</tbody></table></div>`+
     `</div>`;
 }
 
@@ -485,7 +497,7 @@ function renderSettings(){
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='grid two'><div class='field'><label>MQTT port</label><input name='mqttport' type='number' min='1' max='65535' value='${c.mqttport??1883}'></div>`+
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' min='1' max='65535' value='${c.prometheusport??9111}'></div></div>`+
-      `<div class='field'><label>Control base topic</label><input name='controlbasetopic' value='${esc(c.controlbasetopic||'')}'></div>`+
+      `<div class='field'><label>MCU base topic</label><input name='mcubasetopic' value='${esc(c.mcubasetopic||'')}'></div>`+
       `<div class='field'><label>Sensor base topic</label><input name='sensorbasetopic' value='${esc(c.sensorbasetopic||'')}'></div>`+
       `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
       `<div class='actions'><button class='btn btn-action' type='submit'>Save Services</button></div>`+
@@ -611,6 +623,26 @@ function closeFileModal(){
   document.getElementById('modal-content').textContent='';
   state.modalOpen=false;
   schedulePoll();
+}
+
+// ── System ──────────────────────────────────────────────────────────────────
+function renderSystem() {
+  const s = state.status || {};
+  document.getElementById('page-system').innerHTML = 
+    `<div class='card'><h3>Firmware Update (OTA)</h3>` +
+      `<p>Upload a new firmware or filesystem binary directly to the device.</p>` +
+      `<div style='margin:20px 0;padding:20px;border:2px dashed var(--line);border-radius:12px;text-align:center'>` +
+        `<a href='/update' class='btn' style='display:inline-block'>Open Update Portal</a>` +
+      `</div>` +
+      `<p class='small muted'>Note: Any high-power peripherals or radio tasks will be temporarily disabled during the update.</p>` +
+    `</div>` +
+    `<div class='card'><h3>Device Information</h3>` +
+      `<p><b>ID:</b> ${esc(s.id)}</p>` +
+      `<p><b>Chip ID:</b> <span class='mono'>${String(s.chipid || 'unknown').toUpperCase()}</span></p>` +
+      `<p><b>Build:</b> <span class='mono'>${esc(s.build_version)}</span></p>` +
+      `<p><b>Free Heap:</b> ${s.freeheap} bytes</p>` +
+      `<p><b>Uptime:</b> ${Math.floor((s.uptime_ms||0)/1000)}s</p>` +
+    `</div>`;
 }
 
 document.getElementById('file-modal').addEventListener('click',function(e){if(e.target===this)closeFileModal();});
@@ -767,6 +799,7 @@ function renderPages(){
   renderWifi();
   renderSettings();
   renderSensorNamesTable(true);
+  renderSystem();
   showPage(state.page);
 }
 
@@ -783,12 +816,14 @@ function showPage(name){
     wifi:      ['WiFi','Current connection state'],
     console:   ['Console','Recent device events and direct command entry'],
     settings:  ['Settings','Sensor names, MQTT broker, topics, identity, and metrics'],
-    files:     ['LittleFS Files','Browse and inspect files stored on the device filesystem']
+    files:     ['LittleFS Files','Browse and inspect files stored on the device filesystem'],
+    system:    ['System','Updates and device info']
   };
   document.getElementById('page-title').textContent=(titles[name]||['',''])[0];
   document.getElementById('page-subtitle').textContent=(titles[name]||['',''])[1];
   if(name==='settings'){state.settingsRendered=false;renderSettings();}
   if(name==='files'){state.filesLoaded=false;renderFiles();}
+  if(name==='system'){renderSystem();}
   if(name==='console'){renderConsole();startConsolePoll();}
   else{stopConsolePoll();}
 }
