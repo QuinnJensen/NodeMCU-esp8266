@@ -158,7 +158,16 @@ function renderDashboard(){const s=state.status||{};const pct=s.power_percent??0
           `<input type='range' min='0' max='100' value='${pct}' oninput='document.getElementById("dash-pct-val").textContent=this.value+"%";setPowerLive(this.value)' onwheel='event.preventDefault();this.value=parseInt(this.value)-(event.deltaY>0?5:-5);this.oninput()' style='width:100%;margin:8px 0;accent-color:var(--accent)'>`+
         `</div>`+
       `</div>`+
-    `</div>`;
+    `</div>`+
+    `<div class='card' style='margin-top:20px'><h3>Pinout Reference</h3><p class='muted small'>Physical hardware mapping for the NodeMCU board.</p><table class='table small mono'><thead><tr><th>Pin</th><th>Function</th><th>Note</th></tr></thead><tbody>`+
+      `<tr><td>D1</td><td>SSR Out</td><td>PWM Modulator for Heater Relay</td></tr>`+
+      `<tr><td>D2</td><td>1-Wire</td><td>DS18B20 temperature data bus</td></tr>`+
+      `<tr><td>D3</td><td>FLASH</td><td>Hold on boot for Config Portal</td></tr>`+
+      `<tr><td>D4</td><td>LED</td><td>Onboard Blue LED (Status)</td></tr>`+
+      `<tr><td>D5</td><td>OLED SDA</td><td>I2C Data</td></tr>`+
+      `<tr><td>D6</td><td>OLED SCL</td><td>I2C Clock</td></tr>`+
+      `<tr><td>D7</td><td>-</td><td>Reserved (Avoid: SPI Flash Bus)</td></tr>`+
+    `</tbody></table></div>`;
 }
 let liveTimer=null;
 function setPowerLive(p){if(liveTimer)clearTimeout(liveTimer);liveTimer=setTimeout(()=>setPower(p),150);}

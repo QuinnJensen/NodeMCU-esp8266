@@ -69,6 +69,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
       <button data-page="temps">Temperatures</button>
       <button data-page="console">Console</button>
       <button data-page="settings">Settings</button>
+      <button data-page="system">System</button>
     </div>
   </aside>
   <main class="main">
@@ -87,6 +88,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
     <section id="page-temps"     class="page grid hidden"></section>
     <section id="page-console"   class="page grid hidden"></section>
     <section id="page-settings"  class="page grid hidden"></section>
+    <section id="page-system"    class="page grid hidden"></section>
   </main>
 </div>
 <script>
@@ -108,7 +110,16 @@ function renderDashboard(){
     `<div class='grid two'>`+
       `<div class='card'><h3>Quick Send</h3><div class='small muted'>Pick a stored code and transmit it.</div><div id='quick-codes' class='code-list' style='margin-top:10px'></div></div>`+
       `<div class='card'><h3>Status</h3><p><b>SSID:</b> ${esc(s.ssid||'-')}</p><p><b>IP:</b> <span class='mono'>${esc(s.ip||'-')}</span></p><p><b>Heap:</b> ${s.freeheap??0}</p><p><b>Uptime:</b> ${Math.floor((s.uptime_ms||0)/1000)}s</p></div>`+
-    `</div>`;
+    `</div>`+
+    `<div class='card' style='margin-top:20px'><h3>Pinout Reference</h3><p class='muted small'>Physical hardware mapping for the NodeMCU board.</p><table class='table small mono'><thead><tr><th>Pin</th><th>Function</th><th>Note</th></tr></thead><tbody>`+
+      `<tr><td>D1</td><td>RF Data</td><td>OOK Transmitter Output</td></tr>`+
+      `<tr><td>D2</td><td>1-Wire</td><td>DS18B20 temperature data bus (Optional)</td></tr>`+
+      `<tr><td>D3</td><td>FLASH</td><td>Hold on boot for Config Portal</td></tr>`+
+      `<tr><td>D4</td><td>LED</td><td>Onboard Blue LED (Status)</td></tr>`+
+      `<tr><td>D5</td><td>OLED SDA</td><td>I2C Data</td></tr>`+
+      `<tr><td>D6</td><td>OLED SCL</td><td>I2C Clock</td></tr>`+
+      `<tr><td>D7</td><td>-</td><td>Reserved (Avoid: SPI Flash Bus)</td></tr>`+
+    `</tbody></table></div>`;
   renderQuickCodes();
 }
 function renderQuickCodes(){
@@ -147,18 +158,21 @@ function renderTemps(){
 async function postScan(){await postForm('/api/sensors/scan',{});setTimeout(refreshAll,1500);}
 function renderSettings(){
   const c=state.config||{};
+  const ledChecked=c.led_enabled?'checked':'';
   document.getElementById('page-settings').innerHTML=
     `<div class='card'><h3>MQTT &amp; Prometheus</h3><form onsubmit='return saveServices(event)'>`+
       `<div class='field'><label>MQTT host</label><input name='mqtthost' value='${esc(c.mqtthost||'')}'></div>`+
       `<div class='field'><label>MQTT port</label><input name='mqttport' type='number' value='${c.mqttport??1883}'></div>`+
-      `<div class='field'><label>Control base topic</label><input name='controlbasetopic' value='${esc(c.controlbasetopic||'')}'></div>`+
+      `<div class='field'><label>MCU base topic</label><input name='mcubasetopic' value='${esc(c.mcubasetopic||'')}'></div>`+
       `<div class='field'><label>Sensor base topic</label><input name='sensorbasetopic' value='${esc(c.sensorbasetopic||'')}'></div>`+
       `<div class='field'><label>Device ID</label><input name='deviceid' value='${esc(c.deviceid||'')}'></div>`+
       `<div class='field'><label>Prometheus port</label><input name='prometheusport' type='number' value='${c.prometheusport??9111}'></div>`+
       `<button class='btn' type='submit'>Save</button></form>`+
       `<p class='small muted'>Cmd: <span class='mono'>${esc((c.topics||{}).command||'-')}</span></p></div>`+
+    `<div class='card'><h3>Display &amp; LEDs</h3><div style='display:flex;align-items:center;justify-content:space-between;padding:.5rem 0'><div><div style='font-size:.9rem'>Blue LED flash</div><div class='small muted'>Flashes on sensor reads when enabled</div></div><label style='position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0'><input type='checkbox' id='led-toggle' ${ledChecked} style='opacity:0;width:0;height:0;position:absolute'><span id='led-slider' style='position:absolute;inset:0;background:${c.led_enabled?'var(--accent)':'#333'};border-radius:24px;cursor:pointer;transition:.2s'><span id='led-knob' style='position:absolute;width:18px;height:18px;left:${c.led_enabled?'23':'3'}px;bottom:3px;background:${c.led_enabled?'#fff':'#888'};border-radius:50%;transition:.2s'></span></span></label></div><div class='actions' style='margin-top:.75rem'><button class='btn' onclick='saveLed()'>Save LED Settings</button></div></div>`+
     `<div class='card'><h3>Timezone</h3><form onsubmit='return saveTz(event)'><div class='field'><label>POSIX TZ</label><input name='timezone' value='${esc(c.timezone||'')}'></div><button class='btn' type='submit'>Save</button></form></div>`;
 }
+async function saveLed(){const chk=document.getElementById('led-toggle');if(!chk)return;try{await postForm('/api/config/display',{led_enabled:chk.checked?'1':'0'});state.config=await fetchJson('/api/config');renderSettings();}catch(e){console.warn(e);}}
 async function saveServices(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/services',Object.fromEntries(fd));await refreshAll();return false;}
 async function saveTz(ev){ev.preventDefault();const fd=new FormData(ev.target);await postForm('/api/config/time',Object.fromEntries(fd));await refreshAll();return false;}
 
@@ -177,8 +191,32 @@ function stopConsolePoll(){if(state.console.timer){clearInterval(state.console.t
 async function sendConsole(ev){ev.preventDefault();const inp=document.getElementById('console-cmd');const cmd=inp.value.trim();if(!cmd)return false;if(cmd.toLowerCase()==='/clear'){document.getElementById('console-pane').innerHTML='';inp.value='';return false;}inp.value='';await postForm('/api/console/command',{cmd});setTimeout(pollConsoleOnce,300);return false;}
 
 async function refreshAll(){try{state.config=await fJ('/api/config');state.status=await fJ('/api/status');state.profiles=await fJ('/api/profiles');state.codes=await fJ('/api/codes');renderChrome();renderPages();}catch(e){console.warn(e);}}
-function renderPages(){renderDashboard();renderCodes();renderProfiles();renderTemps();renderSettings();showPage(state.page);}
-function showPage(name){state.page=name;document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));const p=document.getElementById('page-'+name);if(p)p.classList.remove('hidden');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===name));const titles={dashboard:['Dashboard','Live transmitter state'],codes:['Codes','Stored codes — pick one to transmit'],profiles:['Profiles','Timing profile definitions'],temps:['Temperatures','Optional 1-Wire DS18B20 sensors'],console:['Console','Recent device events and command entry'],settings:['Settings','MQTT broker, topics, identity, timezone']};document.getElementById('page-title').textContent=(titles[name]||['',''])[0];document.getElementById('page-subtitle').textContent=(titles[name]||['',''])[1];if(name==='console')renderConsole();else stopConsolePoll();}
+function renderSensorNamesTable(){if(!document.getElementById('sn-tbody'))return;}
+
+// System
+function renderSystem() {
+  const s = state.status || {};
+  document.getElementById('page-system').innerHTML = 
+    `<div class='card'><h3>Firmware Update (OTA)</h3>` +
+      `<p>Upload a new firmware or filesystem binary directly to the device.</p>` +
+      `<div style='margin:20px 0;padding:20px;border:2px dashed var(--line);border-radius:12px;text-align:center'>` +
+        `<a href='/update' class='btn' style='display:inline-block'>Open Update Portal</a>` +
+      `</div>` +
+      `<p class='small muted'>Note: Any radio tasks will be temporarily disabled during the update.</p>` +
+    `</div>` +
+    `<div class='card'><h3>Device Information</h3>` +
+      `<p><b>ID:</b> ${esc(s.id)}</p>` +
+      `<p><b>Chip ID:</b> <span class='mono'>${String(s.chipid || 'unknown').toUpperCase()}</span></p>` +
+      `<p><b>Build:</b> <span class='mono'>${esc(s.build_version)}</span></p>` +
+      `<p><b>Free Heap:</b> ${s.freeheap} bytes</p>` +
+      `<p><b>Uptime:</b> ${Math.floor((s.uptime_ms||0)/1000)}s</p>` +
+    `</div>`;
+}
+
+
+function renderPages(){renderDashboard();renderCodes();renderProfiles();renderTemps();renderSettings();renderSystem();showPage(state.page);}
+function showPage(name){state.page=name;document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));const p=document.getElementById('page-'+name);if(p)p.classList.remove('hidden');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===name));const titles={dashboard:['Dashboard','Live transmitter state'],codes:['Codes','Stored OOK codes'],profiles:['Profiles','Transmission timing profiles'],temps:['Temperatures','Optional 1-Wire sensors'],console:['Console','Recent events and direct entry'],settings:['Settings','MQTT broker, topics, identity, timezone'],system:['System','Updates and device info']};document.getElementById('page-title').textContent=(titles[name]||['',''])[0];document.getElementById('page-subtitle').textContent=(titles[name]||['',''])[1];if(name==='console')renderConsole();else stopConsolePoll();if(name==='system')renderSystem();}
+
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
 function pollTick(){refreshAll().finally(()=>state.pollTimer=setTimeout(pollTick,8000));}
 refreshAll().finally(()=>state.pollTimer=setTimeout(pollTick,8000));
