@@ -27,9 +27,9 @@ void setAppConfigExtraHooks(AppConfigExtraLoadFn loadFn, AppConfigExtraSaveFn sa
 
 void buildTopics() {
   String idPart = sanitizeTopicPart(safeDeviceId());
-  snprintf(commandTopic, sizeof(commandTopic), "%s/%s/command", config.controlBaseTopic, idPart.c_str());
-  snprintf(statusTopic,  sizeof(statusTopic),  "%s/%s/status",  config.controlBaseTopic, idPart.c_str());
-  snprintf(resultsTopic, sizeof(resultsTopic), "%s/%s/results", config.controlBaseTopic, idPart.c_str());
+  snprintf(commandTopic, sizeof(commandTopic), "%s/%s/command", config.mcuBaseTopic, idPart.c_str());
+  snprintf(statusTopic,  sizeof(statusTopic),  "%s/%s/status",  config.mcuBaseTopic, idPart.c_str());
+  snprintf(resultsTopic, sizeof(resultsTopic), "%s/%s/results", config.mcuBaseTopic, idPart.c_str());
 #ifdef SHARED_LIB_USE_WATER_PROBE
   snprintf(waterTopic,   sizeof(waterTopic),   "%s/%s/water",   config.sensorBaseTopic, idPart.c_str());
 #endif
@@ -66,9 +66,9 @@ bool setMqttHostValue(const char* host) {
   return true;
 }
 
-bool setControlBaseTopicValue(const char* topic) {
+bool setMcuBaseTopicValue(const char* topic) {
   if (!topic || !topic[0]) return false;
-  strlcpy(config.controlBaseTopic, topic, sizeof(config.controlBaseTopic));
+  strlcpy(config.mcuBaseTopic, topic, sizeof(config.mcuBaseTopic));
   buildTopics();
   return true;
 }
@@ -110,8 +110,8 @@ bool setTimezoneValue(const char* tz) {
 bool loadConfig() {
   // Defaults
   strlcpy(config.mqttHost,  "192.168.1.50", sizeof(config.mqttHost));
-  strlcpy(config.controlBaseTopic, SHARED_LIB_DEFAULT_CONTROL_TOPIC, sizeof(config.controlBaseTopic));
-  strlcpy(config.sensorBaseTopic,  SHARED_LIB_DEFAULT_SENSOR_TOPIC,  sizeof(config.sensorBaseTopic));
+  strlcpy(config.mcuBaseTopic,    SHARED_LIB_DEFAULT_MCU_TOPIC,    sizeof(config.mcuBaseTopic));
+  strlcpy(config.sensorBaseTopic, SHARED_LIB_DEFAULT_SENSOR_TOPIC, sizeof(config.sensorBaseTopic));
   strlcpy(config.deviceId,  SHARED_LIB_DEFAULT_DEVICE_ID,  sizeof(config.deviceId));
   strlcpy(config.timezone,  devicetz,       sizeof(config.timezone));
   config.mqttPort = 1883;
@@ -133,8 +133,8 @@ bool loadConfig() {
   if (err) { buildTopics(); return false; }
 
   strlcpy(config.mqttHost,  doc["mqtthost"]  | "192.168.1.50", sizeof(config.mqttHost));
-  strlcpy(config.controlBaseTopic, doc["controlbasetopic"] | doc["basetopic"] | SHARED_LIB_DEFAULT_CONTROL_TOPIC, sizeof(config.controlBaseTopic));
-  strlcpy(config.sensorBaseTopic,  doc["sensorbasetopic"]  | SHARED_LIB_DEFAULT_SENSOR_TOPIC,  sizeof(config.sensorBaseTopic));
+  strlcpy(config.mcuBaseTopic,    doc["mcubasetopic"]    | doc["controlbasetopic"] | doc["basetopic"] | SHARED_LIB_DEFAULT_MCU_TOPIC, sizeof(config.mcuBaseTopic));
+  strlcpy(config.sensorBaseTopic, doc["sensorbasetopic"] | SHARED_LIB_DEFAULT_SENSOR_TOPIC,  sizeof(config.sensorBaseTopic));
   strlcpy(config.deviceId,  doc["deviceid"]  | SHARED_LIB_DEFAULT_DEVICE_ID, sizeof(config.deviceId));
   strlcpy(config.timezone,  doc["timezone"]  | devicetz,       sizeof(config.timezone));
   config.mqttPort           = doc["mqttport"]           | 1883;
@@ -162,7 +162,7 @@ bool saveConfig() {
   StaticJsonDocument<1024> doc;
   doc["mqtthost"]               = config.mqttHost;
   doc["mqttport"]               = config.mqttPort;
-  doc["controlbasetopic"]       = config.controlBaseTopic;
+  doc["mcubasetopic"]           = config.mcuBaseTopic;
   doc["sensorbasetopic"]        = config.sensorBaseTopic;
   doc["deviceid"]               = safeDeviceId();
   doc["timezone"]               = config.timezone;

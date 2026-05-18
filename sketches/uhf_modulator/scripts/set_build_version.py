@@ -19,9 +19,24 @@ def get_git_hash():
 # Inject immediately at script-load time so the define is present
 # before any .cpp file is compiled (AddPreAction("buildprog") fires
 # too late — after compilation, during linking).
+import os
+
 now = datetime.datetime.now()
 stamp = now.strftime("%Y%m%d-%H%M%S")
 git_hash = get_git_hash()
 version = "{}-{}".format(stamp, git_hash)
 print("[build version] {}".format(version))
-env.Append(CPPDEFINES=[("BUILD_VERSION", '\\"{}\\"'.format(version))])
+
+# Force recompile of the file that holds the version string
+# Path is relative to the project root where pio run is called
+touch_path = "lib/shared/app_state.cpp"
+if os.path.exists(touch_path):
+    os.utime(touch_path, None)
+else:
+    # Handle monorepo vs standalone paths
+    alt_path = "../../lib/shared/app_state.cpp"
+    if os.path.exists(alt_path):
+        os.utime(alt_path, None)
+
+env.Append(CPPDEFINES=[("BUILD_VERSION", '\\\"{}\\\"'.format(version))])
+
